@@ -217,6 +217,7 @@
             (cons "AREA-MOLHADA" am)
             (cons "VELOCIDADE" vel)
             (cons "SECAO" secao)
+            (cons "SECAO-ID" (SARJ:SecaoAtualId))
             (cons "AVISOS" avisos)
           )
         )
@@ -228,14 +229,6 @@
 ;;; ------------------------------------------------------------
 ;;; FORMATACAO DO RESULTADO
 ;;; ------------------------------------------------------------
-(defun SARJ:_Join (linhas sep / out l)
-  (setq out (car linhas))
-  (foreach l (cdr linhas)
-    (setq out (strcat out sep l))
-  )
-  out
-)
-
 ;; sep = "\n" para alert/console, "\\P" para MTEXT
 (defun SARJ:Formata (res sep / linhas caso primeiro av)
   (setq linhas
@@ -275,7 +268,7 @@
   (foreach av (HYDRO:Val "AVISOS" res)
     (setq linhas (append linhas (list (strcat "ATENCAO: " av))))
   )
-  (SARJ:_Join linhas sep)
+  (HYDRO:Join linhas sep)
 )
 
 ;;; ------------------------------------------------------------
@@ -520,6 +513,14 @@
   (princ (strcat "\n" msg))
   (princ)
 )
+
+(HYDRO:SetLabel "HYDRO.RUNOFF" "Coeficiente de runoff (C)" "")
+(HYDRO:SetLabel "HYDRO.TC.MINIMO" "Tempo de concentracao minimo" "min")
+(HYDRO:SetLabel "HYDRO.TEXT.HEIGHT" "Altura do texto de resultado" "un. desenho")
+(HYDRO:SetLabel "HYDRO.TEXT.ROTATION" "Rotacao do texto de resultado" "graus")
+(HYDRO:SetLabel "HYDRO.SURFACE.HANDLE" "Superficie (handle)" "")
+(HYDRO:SetLabel "HYDRO.SECOES" "Secoes de sarjeta cadastradas" "")
+(HYDRO:SetLabel "HYDRO.SECAO.ATUAL" "Secao de sarjeta atual (id)" "")
 
 (HYDRO:Provide "sarjetas" "2.0")
 

@@ -180,5 +180,13 @@
   (princ)
 )
 
+(HYDRO:SetLabel "HYDRO.IDF.K" "IDF - parametro K" "")
+(HYDRO:SetLabel "HYDRO.IDF.A" "IDF - parametro a" "")
+(HYDRO:SetLabel "HYDRO.IDF.B" "IDF - parametro b" "")
+(HYDRO:SetLabel "HYDRO.IDF.C" "IDF - parametro c" "")
+(HYDRO:SetLabel "HYDRO.IDF.S" "IDF - parametro s" "")
+(HYDRO:SetLabel "HYDRO.IDF.P" "IDF - parametro p" "")
+(HYDRO:SetLabel "HYDRO.TR" "Tempo de retorno" "anos")
+
 (HYDRO:Provide "precipitacao" "1.0")
 (princ)

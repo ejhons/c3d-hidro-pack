@@ -138,5 +138,9 @@
 )
 
 (HYDRO:On "sarjeta.calculada" "xdata" 'XD:_OnSarjetaCalculada)
+
+;; Descricao dos dados para o visualizador (nao depende dele)
+(HYDRO:SetLabel "xdata:DREN-SARJETA:1005" "Relacionada com" "")
+(HYDRO:SetLabel "xdata:DREN-SARJETA:1040" "Vazao Q" "m3/s")
 (HYDRO:Provide "xdata" "2.0")
 (princ)

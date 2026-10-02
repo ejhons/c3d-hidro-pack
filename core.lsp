@@ -12,19 +12,22 @@
 ;;;   HYDRO:*features*  alist  ("nome" . "versao")
 ;;;   HYDRO:*hooks*     lista  (evento id funcao)
 ;;;   HYDRO:*session*   alist  usada so quando NAO ha plugin de persistencia
+;;;   HYDRO:*labels*    alist  rotulos legiveis dos dados (usado pelo visualizador)
 ;;;   HYDRO:*dir*       pasta onde estao os .lsp
 ;;;
 ;;; CATALOGO DE EVENTOS (contrato entre plugins)
 ;;;   "sarjeta.calculada"  dados = alist com:
 ;;;       "BACIA" "TALVEGUE" (enames)   "AREA" "COMPRIMENTO" "DECLIVIDADE" "TC"
 ;;;       "CASOS" (lista de (rotulo tr intensidade vazao))
-;;;       "Q" (vazao do primeiro caso)  "LAMINA" "LARGURA" "VELOCIDADE" "SECAO"
+;;;       "Q" (vazao do primeiro caso)  "LAMINA" "LARGURA" "VELOCIDADE"
+;;       "SECAO" (alist da secao)  "SECAO-ID"
 ;;; ============================================================
 (vl-load-com)
 
 (if (not (boundp 'HYDRO:*session*)) (setq HYDRO:*session* nil))
 (setq HYDRO:*features* nil)
 (setq HYDRO:*hooks* nil)
+(setq HYDRO:*labels* nil)
 
 ;; Pasta dos arquivos. Se voce definir HYDRO:*dir* ANTES de carregar o core,
 ;; o valor e respeitado. Senao tenta descobrir pelo caminho de suporte do AutoCAD.
@@ -167,6 +170,63 @@
   T
 )
 
+;; Lista TODA a configuracao como alist plana (("HYDRO.IDF.K" . 781.0) ...),
+;; seja qual for o backend (DB no desenho ou memoria da sessao).
+;; Um no e "ramo" se seu valor e uma lista de nos (pares com chave string).
+(defun HYDRO:_IsBranch (v)
+  (and v
+       (listp v)
+       (vl-every
+         (function (lambda (x) (and (listp x) x (= (type (car x)) 'STR))))
+         v
+       )
+  )
+)
+
+(defun HYDRO:_Flatten (tree prefix / out n key v)
+  (foreach n tree
+    (if (and (listp n) n (= (type (car n)) 'STR))
+      (progn
+        (setq key (if (= prefix "") (car n) (strcat prefix "." (car n))))
+        (setq v (cdr n))
+        (if (HYDRO:_IsBranch v)
+          (setq out (append out (HYDRO:_Flatten v key)))
+          (setq out (append out (list (cons key v))))
+        )
+      )
+    )
+  )
+  out
+)
+
+(defun HYDRO:ListAll ()
+  (if (HYDRO:Has "persistencia")
+    (HYDRO:_Flatten (DB:GetTree) "")
+    HYDRO:*session*
+  )
+)
+
+;;; ------------------------------------------------------------
+;;; ROTULOS (descrevem os dados para quem for exibi-los)
+;;; ------------------------------------------------------------
+;; Cada plugin descreve os seus dados, sem saber quem vai usar:
+;;   (HYDRO:SetLabel "HYDRO.RUNOFF" "Coeficiente de runoff (C)" "")
+;;   (HYDRO:SetLabel "xdata:DREN-SARJETA:1040" "Vazao Q" "m3/s")
+;; Chaves de XData: "xdata:<APP>:<codigo>".  Chaves de DB: o proprio path.
+(defun HYDRO:SetLabel (chave rotulo unidade)
+  (setq HYDRO:*labels*
+    (cons (cons chave (cons rotulo unidade))
+          (vl-remove (assoc chave HYDRO:*labels*) HYDRO:*labels*)
+    )
+  )
+  chave
+)
+
+;; Retorna (rotulo . unidade) ou nil
+(defun HYDRO:GetLabel (chave)
+  (cdr (assoc chave HYDRO:*labels*))
+)
+
 ;;; ------------------------------------------------------------
 ;;; 4. UTILITARIOS COMUNS
 ;;; ------------------------------------------------------------
@@ -188,6 +248,33 @@
   (if (equal x (fix x) 1e-9)
     (itoa (fix x))
     (rtos x 2 2)
+  )
+)
+
+;; Junta uma lista de strings com um separador
+(defun HYDRO:Join (linhas sep / out l)
+  (setq out (car linhas))
+  (foreach l (cdr linhas)
+    (setq out (strcat out sep l))
+  )
+  (if out out "")
+)
+
+(defun HYDRO:_Pad2 (n)
+  (if (< n 10) (strcat "0" (itoa n)) (itoa n))
+)
+
+;; Data e hora atuais: "2026-10-02 15:30"
+(defun HYDRO:Now (/ c d f)
+  (setq c (getvar "CDATE"))
+  (setq d (fix c))
+  (setq f (fix (+ 0.5 (* 1000000.0 (- c d)))))
+  (strcat
+    (itoa (/ d 10000)) "-"
+    (HYDRO:_Pad2 (rem (/ d 100) 100)) "-"
+    (HYDRO:_Pad2 (rem d 100)) " "
+    (HYDRO:_Pad2 (/ f 10000)) ":"
+    (HYDRO:_Pad2 (rem (/ f 100) 100))
   )
 )
 
@@ -265,6 +352,7 @@
     "relacao.lsp"
     "idf.lsp"
     "sarjetas.lsp"
+    "viewer.lsp"
    )
 )
 
@@ -272,6 +360,11 @@
   (foreach m (HYDRO:Manifest)
     (HYDRO:LoadModule m)
   )
+  (HYDRO:Log (strcat "Plugins ativos: " (HYDRO:ListaFeatures)))
+  (princ)
+)
+
+(defun c:HYDROPLUGINS ()
   (HYDRO:Log (strcat "Plugins ativos: " (HYDRO:ListaFeatures)))
   (princ)
 )
