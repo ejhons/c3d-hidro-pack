@@ -1,4 +1,4 @@
-;;; ============================================================
+;;;; ============================================================
 ;;; _template_plugin.lsp - MODELO PARA NOVOS PLUGINS
 ;;;
 ;;; Copie este arquivo, troque BACIA por o prefixo do seu plugin
