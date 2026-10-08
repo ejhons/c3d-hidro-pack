@@ -1,2 +1,10 @@
-build/*
-sarjeta/*
+dist/*
+!dist/.gitkeep
+*.fas
+*.vlx
+*.prv
+*.bak
+CLAUDE.local.md
+.claude/settings.local.json
+__pycache__/
+build/previa_icones.png

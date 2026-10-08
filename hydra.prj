@@ -1,0 +1,16 @@
+;;; VLisp project file [V2.0] hydra saved to:[c:\dev\projects\c3d-hidra-pack] at:[10/2/2026]
+(VLISP-PROJECT-LIST 
+  :NAME
+  hydra
+  :OWN-LIST
+  nil
+  :FAS-DIRECTORY
+  nil
+  :TMP-DIRECTORY
+  nil
+  :PROJECT-KEYS
+  (:BUILD (:standard))
+  :CONTEXT-ID
+  :AUTOLISP
+)
+;;; EOF

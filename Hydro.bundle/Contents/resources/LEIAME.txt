@@ -1,0 +1,21 @@
+RECURSOS DO HYDRO
+
+dcl/     arquivos de dialogo (.dcl)
+         - idf.dcl          (equacao IDF: tr, tc e duracao editaveis)
+         - secao.dcl        (visualizador de secoes)
+         - hidrograma.dcl   (visualizador de hidrogramas)
+         - bacia_tabela.dcl (tabela de bacias)
+         - ligacoes.dcl     (tabela de objetos e ligacoes)
+         - viewer.dcl       (visualizador de dados persistidos)
+slides/  imagens de slide (.sld)
+         - idf_formula.sld  (formula exibida no dialogo da IDF)
+
+O codigo localiza esses arquivos apenas pelo NOME (HYDRO:FindFile), entao
+voce pode reorganizar as subpastas sem alterar nenhum .lsp, desde que
+mantenha a lista em HYDRO:_SubDirs (core/core.lsp).
+
+icons/   icones das barras de ferramentas (.bmp 16x16 e 24x24; ou .png)
+         Nome: <id da acao com . trocado por _>_16 / _24 (ex.: bacia_cadastrar_16.bmp)
+         _grupo_<ordem>_16/24 = icone do grupo; _padrao_16/24 = generico.
+         Para usar icones seus, grave arquivos com o MESMO NOME.
+         Gerador: python build/gerar_icones.py  (--so-faltantes para nao sobrescrever)

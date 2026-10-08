@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  PackageContents.xml - descritor do bundle Hydro (Autodesk Autoloader).
+  Tutorial completo em docs/distribuicao.md
+-->
+<ApplicationPackage
+    SchemaVersion="1.0"
+    AppVersion="1.0.0"
+    ProductCode="{7453E043-495C-4821-BDAC-B6361442A7FA}"
+    UpgradeCode="{A0F97C50-DFF1-4CF1-8E1D-63AEFF806FB6}"
+    Name="Hydro - Drenagem para Civil 3D"
+    Description="Calculos hidrologicos e hidraulicos (IDF, sarjetas, bacias) em AutoLISP"
+    Author="(preencha o nome do autor)">
+
+  <Components>
+
+    <!--
+      Requisitos de execucao:
+        OS         : o plugin usa DCL e ActiveX (vla-*), logo so Windows
+        Platform   : AutoCAD* = AutoCAD e produtos verticais (inclui Civil 3D)
+        SeriesMin  : R21.0 = AutoCAD 2017; ajuste conforme o que voce testou
+        SupportPath: pastas (relativas ao .bundle) acrescentadas ao caminho de
+                     suporte; permite findfile achar hydro.lsp e os .dcl/.sld
+    -->
+    <RuntimeRequirements
+        OS="Win64"
+        Platform="AutoCAD*"
+        SeriesMin="R21.0"
+        SupportPath="./Contents;./Contents/resources/dcl;./Contents/resources/slides;./Contents/resources/icons" />
+
+    <!--
+      Um unico ponto de entrada. PerDocument="True": AutoLISP e isolado por
+      desenho, entao o conjunto precisa ser carregado em CADA documento aberto.
+      Para distribuir compilado, troque ModuleName para ./Contents/hydro.fas
+      (ou hydro.vlx). O build/build.lsp faz essa troca automaticamente.
+    -->
+    <ComponentEntry
+        AppName="Hydro"
+        Version="1.0.0"
+        ModuleName="./Contents/hydro.lsp"
+        AppDescription="Conjunto Hydro: core + plugins de drenagem"
+        PerDocument="True" />
+
+  </Components>
+</ApplicationPackage>
