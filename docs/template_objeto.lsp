@@ -187,6 +187,7 @@
     ;; outras capacidades opcionais (veja objetos.lsp):
     ;;   ("PARAMS-CALCULO" . defs)  perguntas extras do calculo
     ;;   ("VAZAO-EM" . fn)          (fn en metodo tr tc) -> alist do metodo (QP...) se o objeto GERA vazao
+    ;;   ("RECALCULA" . fn)       (fn en metodo tr) -> nil ou texto do erro; recalculo sem perguntas dos montantes
     ;;   ("TEMPO-MODO" . "concentracao"|"percurso")  como o tempo de saida combina os montantes
     ;;     (CALCULA pode devolver "PERCURSO" em min; sem CALCULA o objeto so repassa)
     ;;   ("AREA-PROPRIA" . fn)      area contribuinte

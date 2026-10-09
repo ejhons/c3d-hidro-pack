@@ -29,7 +29,7 @@
   (setq r (BAC:_FluxoCalculo))
   (if r
     (progn
-      (alert (BAC:_Resumo (car r) (cdr r)))
+      (BAC:_Mostra (BAC:_Resumo (car r) (cdr r)))
       (BAC:_InsereTexto
         (BAC:LinhasTexto (BAC:Ler (car r)) (HYDRO:Handle (car r)) (list (cdr r))))
     )

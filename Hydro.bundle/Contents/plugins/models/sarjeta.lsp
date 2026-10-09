@@ -301,6 +301,7 @@
       (strcat "Afluentes: " (itoa (length (LIG:Afluentes en))))
     )
   )
+  (setq linhas (append linhas (OBJ:LinhasAtrib en)))
   (foreach r (SOB:Hidraulica en)
     (setq linhas
       (append linhas

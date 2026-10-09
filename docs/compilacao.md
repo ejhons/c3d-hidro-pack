@@ -116,12 +116,12 @@ A ordem importa no VLX, porque tudo é executado em sequência na carga:
 2. `Contents/core/core.lsp`
 3. `Contents/plugins/persistence.lsp`
 4. `Contents/plugins/relacao.lsp`
-5. `Contents/plugins/idf.lsp` e `precipitacao.lsp`
+5. `Contents/plugins/idf.lsp`, `precipitacao.lsp` e `superficie.lsp`
 6. `Contents/plugins/secao.lsp` e `sarjetas.lsp`
-7. `Contents/plugins/hidrograma.lsp`, `objetos.lsp` e `ligacao.lsp`
+7. `Contents/plugins/hidrograma.lsp`, `objetos.lsp`, `ligacao.lsp`, `objetos_padrao.lsp`, `auditoria.lsp` e `etiqueta.lsp`
 8. `Contents/plugins/models/` (`bacia`, `sarjeta`, `objetos_tipos`; depois de `objetos`)
-9. `Contents/plugins/registry/` (`metodos`, `tempo_conc`, `hidrograma_tipos`, `hietograma_tipos`)
-10. `Contents/views/idf_view.lsp`, `secao_view.lsp`, `bacia_view.lsp`, `bacia_tabela.lsp`, `hidrograma_view.lsp`, `objetos_tabela.lsp`, `objetos_padrao_view.lsp`, `auditoria_view.lsp`, `viewer.lsp`, `painel.lsp`, `painel_acoes.lsp`, `menu.lsp`, `toolbar.lsp` (nessa ordem, depois de todos os plugins; ver `HYDRO:Manifest`)
+9. `Contents/plugins/registry/` (`metodos_chuva_vazao`, `tempo_conc`, `hidrograma_tipos`, `hietograma_tipos`)
+10. `Contents/views/idf_view.lsp`, `secao_view.lsp`, `bacia_view.lsp`, `bacia_tabela.lsp`, `hidrograma_view.lsp`, `objetos_tabela.lsp`, `objetos_padrao_view.lsp`, `auditoria_view.lsp`, `padroes_view.lsp`, `etiqueta_view.lsp`, `viewer.lsp`, `painel.lsp`, `painel_acoes.lsp`, `menu.lsp`, `toolbar.lsp` (nessa ordem, depois de todos os plugins; ver `HYDRO:Manifest`)
 11. `Contents/hydro.lsp` — **por último** (localiza a raiz para achar DCL/SLD)
 
 Novos plugins entram **antes** do `hydro.lsp`.
@@ -195,7 +195,7 @@ para testes internos).
 
 1. Instale a versão compilada em uma máquina/perfil limpo.
 2. Abra um desenho e digite `HYDROPLUGINS`: devem aparecer
-   `core`, `persistencia`, `xdata`, `precipitacao`, `sarjetas`, `secao`, `metodos`, `bacia`, `hidrograma`, `visualizador`
+   `core`, `persistencia`, `xdata`, `precipitacao`, `sarjetas`, `secao`, `metodos-chuva-vazao`, `bacia`, `hidrograma`, `visualizador`
    (e `hydro`).
 3. Abra um **segundo desenho** na mesma sessão e repita: o `PerDocument` deve
    ter carregado o Hydro nele também.

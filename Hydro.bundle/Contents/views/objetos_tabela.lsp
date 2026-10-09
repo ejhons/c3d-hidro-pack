@@ -38,6 +38,18 @@
   out
 )
 
+;; colunas do CSV com os ATRIB do objeto: ("Atrib: <rotulo>" . valor)
+(defun OBT:_ColunasAtrib (en / id out p)
+  (setq id (OBJ:TipoDe en))
+  (foreach p (OBJ:AtribDe en)
+    (setq out
+      (append out
+        (list (cons (strcat "Atrib: " (OBJ:_RotuloParam id (car p)))
+                    (if (numberp (cdr p)) (HYDRO:CsvNum (cdr p)) (OBJ:_FmtVal (cdr p)))))))
+  )
+  out
+)
+
 (defun OBT:_Registro (en / destino afl area)
   (setq destino (LIG:Destino en))
   (setq afl (length (LIG:Afluentes en)))
@@ -57,6 +69,7 @@
     (cons "DETALHE" (OBT:_Detalhe en))
     (cons "CSV"
       (OBJ:_Limpa
+        (append
         (list
           (cons "Nome" (OBJ:Nome en))
           (cons "Tipo" (OBJ:_NomeTipo (OBJ:TipoDe en)))
@@ -69,6 +82,8 @@
                   nil))
           (cons "Area a montante (ha)"
                 (if (> area 0.0) (HYDRO:CsvNum (/ area 10000.0)) nil))
+        )
+        (OBT:_ColunasAtrib en)
         )
       )
     )

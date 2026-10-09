@@ -15,6 +15,9 @@
 ;;; ---- 10: Dados e IDF
 (PNL:Acao "idf.calcular"    "Dados e IDF" 10 10 "Equacao IDF (tr, tc, duracao)" "IDF" '("idf-view"))
 (PNL:Acao "idf.parametros"  "Dados e IDF" 10 20 "Parametros da IDF"             "ATUALIZAIDF" '("idf-view"))
+(PNL:Acao "sup.atualizar"    "Dados e IDF" 10 35 "Definir a superficie (cotas)"          "ATUALIZASUPERFICIE" '("superficie"))
+(PNL:Acao "sis.padroes"     "Dados e IDF" 10 40 "Padroes do projeto (C, CN, TR...)"    "PADROES" '("padroes-view"))
+(PNL:Acao "sis.calcauto"    "Dados e IDF" 10 50 "Modo automatico dos calculos"          "CALCAUTO" '("ligacao"))
 (PNL:Acao "idf.tr"          "Dados e IDF" 10 30 "Tempo de retorno"              "ATUALIZATR" '("idf-view"))
 
 ;;; ---- 20: Bacias
@@ -56,6 +59,12 @@
 (PNL:Acao "secao.editar"    "Secoes" 50 20 "Editar secao de sarjeta"                 "EDITASECAO" '("secao-view"))
 (PNL:Acao "secao.remover"   "Secoes" 50 30 "Remover secao de sarjeta"                "REMOVESECAO" '("secao-view"))
 (PNL:Acao "secao.ver"       "Secoes" 50 50 "Visualizar secoes"                      "SECAO" '("secao-view"))
+
+;;; ---- 55: Etiquetas
+(PNL:Acao "etq.inserir"     "Etiquetas" 55 10 "Inserir etiqueta dinamica"          "ETIQUETA" '("etiqueta-view"))
+(PNL:Acao "etq.editar"      "Etiquetas" 55 20 "Editar etiqueta (relatorio/modelo)" "ETIQUETAEDITA" '("etiqueta-view"))
+(PNL:Acao "etq.tabela"      "Etiquetas" 55 30 "Inserir tabela viva de objetos"     "TABELAVIVA" '("etiqueta-view"))
+(PNL:Acao "etq.atualizar"   "Etiquetas" 55 40 "Atualizar etiquetas e tabelas"      "ATUALIZAETIQUETAS" '("etiqueta-view"))
 
 ;;; ---- 60: Texto e parametros
 

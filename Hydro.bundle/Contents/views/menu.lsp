@@ -113,7 +113,8 @@
   (if (equal (vla-get-onmenubar pop) :vlax-false)
     (progn
       (setq n (vla-get-count barra))
-      (vla-insertinmenubar pop barra (max 0 (1- n)))   ; antes do ultimo item (Ajuda)
+      ; (vla-insertinmenubar pop barra (max 0 (1- n))) 
+      (vla-insertinmenubar pop (max 0 (1- n)))   ; antes do ultimo item (Ajuda)
     )
   )
   T

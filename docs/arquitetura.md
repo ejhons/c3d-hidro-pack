@@ -22,7 +22,7 @@ models/     OBJETOS DO SISTEMA (só a funcionalidade do objeto; sem perguntas, c
   sarjeta         SOB:   sarjeta: seções, geometria, hidráulica (Izzard); declara o tipo "sarjeta"
   objetos_tipos   OTP:   tipos básicos: trecho, estrutura, tubo-c3d
 registry/   CATÁLOGOS (só cadastros de métodos e tipos; carregam depois do sistema):
-  metodos         MET:   métodos chuva-vazão (racional, SCS-CN, vazão informada)
+  metodos_chuva_vazao MET:   métodos chuva-vazão (racional, SCS-CN, vazão informada)
   tempo_conc      TCM:   métodos de tempo de concentração (Kirpich, Ventura, Pasini...)
   hidrograma_tipos HID:  tipos de hidrograma (triangular, adimensional, trapezoidal, usuário)
   hietograma_tipos HIET: tipos de hietograma (bloco único, blocos alternados, Chicago)
@@ -71,7 +71,7 @@ Plugins são **independentes entre si**, mas todos dependem do `core`.
 ```
 
 Nomes registrados: `core`, `hydro`, `persistencia`, `xdata`, `idf`, `precipitacao`,
-`sarjetas`, `secao`, `metodos`, `tempo-conc`, `hidrograma-tipos`, `hietograma-tipos`,
+`sarjetas`, `secao`, `metodos-chuva-vazao`, `tempo-conc`, `hidrograma-tipos`, `hietograma-tipos`,
 `bacia`, `bacia-tabela`, `hidrograma`,
 `objetos`, `ligacao`, `objetos-tipos`, `sarjeta-obj`, `objetos-tabela`, `visualizador`,
 `painel`, `painel-acoes`, `menu`, `toolbar`.
@@ -120,6 +120,8 @@ Com o plugin `persistencia`, grava no desenho; sem ele, só na sessão.
 | `HYDRO.SURFACE.HANDLE`                                    | string           | `sarjetas`          | Handle da superfície TIN                                                                    |
 | `HYDRO.SECOES`                                            | lista            | `sarjetas`          | Seções cadastradas`(id ("h" . x) ("s" . x) ("w" . x) ("n" . x))`                         |
 | `HYDRO.VAZAO.PRESERVA`                                    | inteiro          | `ligacao`           | 1 = preservar a maior vazão entre entrada e saída (flag geral; padrão 1)                       |
+| `HYDRO.CALC.AUTO`                                         | inteiro          | `ligacao`           | 1 = modo automático dos cálculos, sem perguntas (comando `CALCAUTO`; padrão 0)                |
+| `HYDRO.PADRAO.*`                                          | qualquer         | `padroes-view`      | Padrões do projeto por parâmetro (`HYDRO.PADRAO.MET.racional.C`...); definidos por `PADROES`     |
 | `HYDRO.SECAO.ATUAL`                                       | inteiro          | `sarjetas`          | Id da seção em uso (o plugin`secao` também a altera ao "Selecionar")                    |
 | `HYDRO.SECAO.EXAG`                                        | inteiro          | `secao`             | Exagero vertical da visualização (1, 2, 5 ou 10)                                           |
 | `HYDRO.SECAO.COMUM`                                       | inteiro          | `secao`             | 1 = escala comum a todas as seções                                                         |
@@ -141,7 +143,7 @@ Com o plugin `persistencia`, grava no desenho; sem ele, só na sessão.
 | `HYDRO.OBJ.<tipo>.calc.<param>`                           | variado          | `ligacao`           | Último valor usado nos parâmetros de cálculo do tipo                                      |
 | `HYDRO.TC.<id>.<param>`                                   | variado          | `tempo_conc`        | Último valor usado em cada parâmetro de cada método de tc (ex.:`HYDRO.TC.giandotti.HM`) |
 | `HYDRO.TEXT.HEIGHT`, `HYDRO.TEXT.ROTATION`              | real             | `sarjetas`          | **Compartilhadas** com o texto de resultado da bacia                                   |
-| `HYDRO.MET.<id>.<param>`                                  | variado          | `metodos`           | Último valor usado em cada parâmetro de cada método (ex.:`HYDRO.MET.scs-cn.CN`)         |
+| `HYDRO.MET.<id>.<param>`                                  | variado          | `metodos-chuva-vazao` | Último valor usado em cada parâmetro de cada método (ex.:`HYDRO.MET.scs-cn.CN`)         |
 | `HYDRO.HID.TIPO`                                          | string           | `hidrograma`        | Último tipo de hidrograma usado                                                             |
 | `HYDRO.HID.<id>.<param>`                                  | variado          | `hidrograma`        | Último valor usado em cada parâmetro de cada tipo                                          |
 
@@ -196,6 +198,10 @@ Chaves de XData: `xdata:<APP>:<codigo>`. Chaves de DB: o próprio path.
 | `HYDROAUDIT` | auditoria-view | Audita o desenho, pergunta e corrige (seção 18b) |
 | `LIGAR`                                                                                     | ligacao        | Origens (várias) → destino. Enter no destino usa o destino padrão da origem (a bacia sugere o próprio talvegue)               |
 | `DESLIGAR`                                                                                  | ligacao        | Tira a(s) origem(ns) do destino atual                                                                                             |
+| `ATUALIZASUPERFICIE` | superficie | Define a superfície TIN (cotas de bacia e sarjeta); Enter sem selecionar limpa |
+| `ETIQUETA`, `ETIQUETAEDITA`, `TABELAVIVA`, `ATUALIZAETIQUETAS` | etiqueta-view | Etiquetas dinâmicas (relatório ou modelo) e tabela viva de objetos (seção 18c) |
+| `PADROES`                                                                                   | padroes-view   | Define os padrões do projeto (TR, tc mínimo, método, C, CN, n de Manning...) (15.5)                                         |
+| `CALCAUTO`                                                                                  | ligacao        | Liga/desliga o modo automático dos cálculos, sem perguntas (15.5)                                                           |
 | `PRESERVAVAZAO`                                                                             | ligacao        | Liga/desliga a flag geral de preservação da maior vazão entre entrada e saída (15.4)                                          |
 | `VALIDARLIGACOES`                                                                           | ligacao        | Verifica e corrige a integridade das ligações                                                                                   |
 | `CALCULAOBJETO`                                                                             | ligacao        | Calcula um objeto: entrada (saídas dos montantes), saída (precipitação no maior tempo) e o cálculo do tipo                                                       |
@@ -233,7 +239,7 @@ lista e usa, sem se conhecerem.
 
 | Catálogo              | Quem cadastra                                         | Quem consome     |
 | ---------------------- | ----------------------------------------------------- | ---------------- |
-| `metodo-chuva-vazao` | `registry/metodos` (e qualquer plugin seu)          | `bacia`        |
+| `metodo-chuva-vazao` | `registry/metodos_chuva_vazao` (e qualquer plugin seu)          | `bacia`        |
 | `hidrograma-tipo`    | `registry/hidrograma_tipos` (e qualquer plugin seu) | `hidrograma`   |
 | `hietograma-tipo`    | `registry/hietograma_tipos` (e qualquer plugin seu) | `precipitacao` |
 | `acao-painel`        | `views/painel_acoes` (e qualquer plugin seu, com `PNL:Acao`) | `painel`, `menu`, `toolbar` |
@@ -645,6 +651,36 @@ estrutura) só repassam: `tp = 0`.
 composta usam o `QP` de saída mas não foram revistos para a composição; recalcular um montante
 deixa o receptor desatualizado até recalcular.
 
+### 15.5 Recálculo dos montantes, oferta de ligação, padrões do projeto e modo automático
+
+**Recálculo dos montantes.** Calcular um objeto (`BACIA`, `CALCULAOBJETO`) **recalcula antes todos os
+montantes**, do mais a montante para jusante (`LIG:RecalcularMontantes`, ordem de `LIG:_Ordem`), com o
+mesmo método e TR, **sem perguntas**. Cada montante usa os parâmetros do último cálculo daquele
+método/TR (ou os padrões do projeto, se nunca foi calculado). Bacia: capacidade `RECALCULA`
+(`BAC:_ObjRecalcula`; atualiza o cadastro com `BAC:Obter`). Demais tipos: cálculo genérico
+`LIG:CalcularCore`. Para no primeiro erro e diz qual objeto falhou.
+
+**Oferta de ligação ao criar.** Ao cadastrar um objeto **novo** (`OBJETO`, `<TIPO>CAD`, `BACIACAD`) o
+Hydro pergunta `[Montante/Destino/Nao]` antes de seguir (`LIG:OferecerLigacao`): *Montante* seleciona os
+objetos que descarregam nele (e pergunta se contribuem ao talvegue, se ele concentra); *Destino* usa o
+`LIGAR`. Não pergunta ao editar nem se o objeto já tem ligação.
+
+**Padrões do projeto** (`PADROES`, `views/padroes_view.lsp`). Valores gravados no desenho em
+`HYDRO.PADRAO.<chave do parâmetro>` (ex.: `HYDRO.PADRAO.MET.racional.C`, `...scs-cn.CN`), mais `HYDRO.TR`,
+`HYDRO.TC.MINIMO` e o método padrão. Prioridade ao sugerir (`HYDRO:AskParams`, `HYDRO:ParamsPadrao`):
+
+```
+atributo da bacia (C, CN) > padrão do projeto > último valor usado > padrão do método
+```
+
+No `BACIACAD`, Enter em C/CN deixa a bacia **sem** o atributo, e vale o padrão do projeto na hora de
+calcular (mudar o padrão depois muda o cálculo; digitar um valor fixa o atributo naquela bacia).
+
+**Modo automático** (`HYDRO.CALC.AUTO` = 1, comando `CALCAUTO`; padrão desligado). Ligado, `BACIA` e
+`CALCULAOBJETO` usam o último TR, o último método e os parâmetros conhecidos **sem perguntar**, escrevem
+o resultado na linha de comando (sem `alert`) e não oferecem inserir texto. Se não há TR ou método
+conhecido ainda, perguntam normalmente.
+
 ## 16. Como criar um tipo de objeto (aberto/fechado)
 
 Um tipo é um **cadastro** em um arquivo novo; nenhum arquivo existente muda.
@@ -673,6 +709,7 @@ Capacidades opcionais (todas opcionais; o que o tipo não declara, ninguém assu
 | `PADROES`             | `(fn en)` → alist                                                                        | padrões dos parâmetros ao cadastrar                                                             |
 | `REGRA`               | `(fn tipo-origem tipo-destino)`                                                           | `nil`/`T` = permitido; **string** = motivo da recusa                                    |
 | `VAZAO-EM`            | `(fn en metodo tr tc)` → alist do método (`QP`, `VOLUME`) ou nil                         | o objeto**gera** vazão: reavaliada**só dele** no tc dado (a bacia refaz o método com os parâmetros gravados) |
+| `RECALCULA`           | `(fn en metodo tr)` → nil (ok) ou texto do erro                                          | recálculo**sem perguntas** usado para atualizar montantes (bacia); sem ele vale o cálculo genérico (15.5) |
 | `TEMPO-MODO`          | `"concentracao"` \| `"percurso"` (padrão)                                                  | como o tempo de saída combina os montantes (seção 15.4)                                           |
 | `AREA-PROPRIA`        | `(fn en)` → m²                                                                          | área contribuinte                                                                                |
 | `DESTINO-PADRAO`      | `(fn en)` → ename                                                                        | destino sugerido em`LIGAR`                                                                      |
@@ -905,6 +942,36 @@ que dá erro não derruba as outras: vira `("ERRO-VERIFICACAO" mensagem)`.
 
 `VALIDARLIGACOES` continua existindo (só ligações). Corrigir um vínculo ou uma seção **não recalcula**
 nada: rode `CALCULAOBJETO` / `BACIA` depois.
+
+## 18c. Etiquetas dinâmicas e tabela viva
+
+Para o Hydro não ficar "silencioso", dois elementos do desenho se **atualizam sozinhos** (plugin
+`etiqueta`, comandos em `views/etiqueta_view.lsp`). Não usam campos (`FIELD`) do AutoCAD, que não leem
+os dados do Hydro: o plugin reescreve o texto quando recebe os eventos `bacia.calculada`,
+`objeto.calculado`, `bacia.cadastrada`, `objeto.cadastrado`, `ligacao.criada` e `ligacao.removida`
+(todas as ações são protegidas: um erro na etiqueta nunca interrompe o cálculo).
+
+**Etiqueta** (`ETIQUETA`, `ETIQUETAEDITA`): MTEXT na camada `HYDRO-ETIQUETA` ligado ao objeto
+(chave `HYDRO-ETQ` na etiqueta: `ALVO` = handle, `MODO`, `MODELO`).
+
+| Modo       | Texto                                                                                         |
+|------------|-----------------------------------------------------------------------------------------------|
+| `FIXO`     | **relatório do objeto**: o mesmo texto de `OBJ:Resumo` (cadastro, atributos, cálculos)        |
+| `MODELO`   | **identificação / prancha**: texto seu com campos `{CAMPO}`, um modelo por etiqueta           |
+
+Campos (sem diferenciar maiúsculas; `?` se não existir): `{NOME} {TIPO} {HANDLE}`, `{AREA}` (ha),
+qualquer chave de `ATRIB` (`{C} {CN} {N}`), depois de `CARACT` (`{COMP} {DECL}`), depois do **último
+cálculo** (`{QP} {TR} {TC} {METODO}`, a saída), `{TCP}` (tc próprio), `{E.QP} {E.TC}` (entrada) e
+`{H.LAMINA} {H.VELOCIDADE} {H.PERCURSO}` (hidráulica). `\P` quebra a linha. Modelo padrão por tipo:
+`HYDRO.ETIQUETA.MODELO.<tipo>` (o `ETIQUETAEDITA` pode gravar o modelo editado como padrão).
+
+**Tabela viva** (`TABELAVIVA`): objeto `TABLE` na camada `HYDRO-TABELA` (chave `HYDRO-TBL`) com
+todos os objetos: nome, tipo, A, L, S, atributos, TR, Q de entrada, Q de saída, tc e destino. Cada
+atualização refaz as linhas. `ATUALIZAETIQUETAS` força a atualização de tudo.
+
+**Limites:** mostram o que está **gravado**; mover a geometria sem recalcular não muda o resultado. A
+etiqueta fica no ponto onde foi inserida (não acompanha a entidade). A verificação `etiquetas` do
+`HYDROAUDIT` acha etiquetas cujo objeto não existe mais e as apaga.
 
 ## 19. Painel, menu e barras de ferramentas (views)
 

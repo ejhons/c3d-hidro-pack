@@ -31,6 +31,10 @@ Pontos mais incertos, a testar primeiro no AutoCAD:
 - `MONTANTE` em `PARAMS` (gravação via `OBJ:GravaRegistro`, `ldata` com `("31")` sem valor), `LIG:` sem o
   índice `HYDRO.LIGACOES` (varre `OBJ:Listar`), `BAC:_CalcularEGravar` composto, `VAZAO-EM` reavaliando o método,
   `LIGAR` perguntando o flag, sarjeta recebendo sarjeta em cadeia. Desenhos antigos com `HYDRO-LIG` **não migram**.
+- Recálculo automático dos montantes, `LIG:OferecerLigacao` (prompt `getkword` com `initget` montado), `PADROES`
+  (`HYDRO:_AskUm`), modo `CALCAUTO` e `sssetfirst`/`ssget` na oferta de ligação: nada disso foi executado.
+- Etiquetas/tabela viva: `vla-addtable`/`vla-settext`/`vla-insertrows` e `vla-put-textstring` no MTEXT, `ssget "_X"` por camada
+  (camada congelada?), assinatura dos eventos e a atualização a cada cálculo (custo com muitos objetos).
 - Rodar `HYDROTESTE` (carregar `tests/teste_manual.lsp`).
 
 ## Estrutura
@@ -139,6 +143,14 @@ Na pasta de código-fonte **não deixe `.fas`**: o carregador prefere `.fas` a `
   por `VAZAO-EM`; racional composto exato). Tempo de saída da bacia: máximo se o montante não contribui ao talvegue,
   soma se contribui; sarjeta: `max tc_k + L/V`. Flag geral `HYDRO.VAZAO.PRESERVA` (`PRESERVAVAZAO`, padrão 1):
   `Q_saida = max(Q_entrada, Q_calc)`. Sarjeta/estrutura exigem montante. Calcular de montante para jusante.
+- Calcular um objeto **recalcula os montantes antes** (ordem montante→jusante, capacidade `RECALCULA` ou
+  `LIG:CalcularCore`, sem perguntas); objeto novo **oferece ligação** (`LIG:OferecerLigacao`); parâmetros têm
+  **padrão do projeto** (`HYDRO.PADRAO.*`, comando `PADROES`) acima do último usado; `HYDRO.CALC.AUTO`
+  (`CALCAUTO`) calcula sem perguntar. Detalhes em `arquitetura.md` 15.5.
+- **Etiquetas dinâmicas e tabela viva** (`plugins/etiqueta.lsp`, `arquitetura.md` 18c): MTEXT/TABLE do desenho
+  reescritos pelos eventos de cadastro/cálculo/ligação (nada de `FIELD`); modo `FIXO` = relatório (`OBJ:Resumo`),
+  modo `MODELO` = campos `{CAMPO}` editáveis. Janela ancorável/modeless **não** existe em AutoLISP (DCL é modal;
+  `PaletteSet` é .NET): a tabela viva é a alternativa escolhida.
 - Uma origem tem um único destino (sem divisão de vazão) por enquanto.
 - CSV para Excel pt-BR: separador `;` e vírgula decimal.
 - Painel de botões = lançador modal gerado do catálogo `acao-painel`; o **menu da barra de menus**

@@ -167,7 +167,7 @@
 
 ;; posicao inicial de uma barra NOVA (i = posicao da barra na lista)
 (defun TLB:_Posiciona (tb i / pos)
-  (setq pos (HYDRO:Get "HYDRO.TOOLBAR.DOCK" "left"))
+  (setq pos (HYDRO:Get "HYDRO.TOOLBAR.DOCK" "top"))
   (cond
     ((equal pos "top") (vla-dock tb 0))
     ((equal pos "bottom") (vla-dock tb 1))

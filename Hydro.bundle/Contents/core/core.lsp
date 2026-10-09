@@ -93,7 +93,7 @@
 (defun HYDRO:ListaFeatures (/ f out)
   (setq out "")
   (foreach f (reverse HYDRO:*features*)
-    (setq out (strcat out (if (= out "") "" ", ") (car f) " " (cdr f)))
+    (setq out (strcat out (if (= out "") "" "\n") (car f) " " (cdr f)))
   )
   out
 )
@@ -319,7 +319,7 @@
 ;;   (HYDRO:RegAdd "metodo-chuva-vazao" "racional" dados)   ; dados = alist
 ;;   (HYDRO:RegList "metodo-chuva-vazao")   -> (("racional" . dados) ...)
 ;;   (HYDRO:RegGet  "metodo-chuva-vazao" "racional")        -> dados
-;; Catalogos em uso: "metodo-chuva-vazao" (metodos.lsp) e
+;; Catalogos em uso: "metodo-chuva-vazao" (metodos_chuva_vazao.lsp) e
 ;; "hidrograma-tipo" (hidrograma.lsp). Veja docs/arquitetura.md.
 (defun HYDRO:RegAdd (cat id dados / lista)
   (setq lista (cdr (assoc cat HYDRO:*registry*)))
@@ -445,7 +445,9 @@
 (defun HYDRO:AskParams (defs prefixo sobrescritas / out d chave atual v)
   (foreach d defs
     (setq chave (nth 0 d))
-    (setq atual (HYDRO:Get (strcat prefixo chave) nil))
+    ;; padrao do projeto (PADROES) vale mais que o ultimo valor usado
+    (setq atual (HYDRO:Get (HYDRO:PadraoKey prefixo chave) nil))
+    (if (not atual) (setq atual (HYDRO:Get (strcat prefixo chave) nil)))
     (if (assoc chave sobrescritas)
       (setq atual (cdr (assoc chave sobrescritas)))
     )
@@ -459,6 +461,42 @@
       (HYDRO:Set (strcat prefixo chave) v)
     )
     (setq out (append out (list (cons chave v))))
+  )
+  out
+)
+
+;; Chave do PADRAO DO PROJETO de um parametro: o prefixo "HYDRO.MET.racional." e a
+;; chave "C" viram "HYDRO.PADRAO.MET.racional.C" (definido pelo comando PADROES).
+(defun HYDRO:PadraoKey (prefixo chave)
+  (if (equal (substr prefixo 1 6) "HYDRO.")
+    (strcat "HYDRO.PADRAO." (substr prefixo 7) chave)
+    (strcat "HYDRO.PADRAO." prefixo chave)
+  )
+)
+
+;; Valor padrao do projeto de um parametro, ou nil
+(defun HYDRO:Padrao (prefixo chave)
+  (HYDRO:Get (HYDRO:PadraoKey prefixo chave) nil)
+)
+
+;; Modo automatico dos calculos (HYDRO.CALC.AUTO = 1, comando CALCAUTO): usa TR,
+;; metodo e parametros ja conhecidos, sem perguntar nem pedir confirmacao.
+(defun HYDRO:CalcAuto ()
+  (if (= (HYDRO:Get "HYDRO.CALC.AUTO" 1) 1) T nil)
+)
+
+;; Igual a HYDRO:AskParams, mas SEM perguntar: devolve (chave . valor) com a
+;; prioridade  sobrescrita > padrao do projeto > ultimo usado > padrao do metodo.
+(defun HYDRO:ParamsPadrao (defs prefixo sobrescritas / out d chave atual)
+  (foreach d defs
+    (setq chave (nth 0 d))
+    (setq atual (HYDRO:Get (HYDRO:PadraoKey prefixo chave) nil))
+    (if (not atual) (setq atual (HYDRO:Get (strcat prefixo chave) nil)))
+    (if (assoc chave sobrescritas)
+      (setq atual (cdr (assoc chave sobrescritas)))
+    )
+    (if (not atual) (setq atual (nth 2 d)))
+    (setq out (append out (list (cons chave atual))))
   )
   out
 )
@@ -752,6 +790,7 @@
     "plugins/relacao"
     "plugins/idf"
     "plugins/precipitacao"
+    "plugins/superficie"
     "plugins/secao"
     "plugins/sarjetas"
     "plugins/hidrograma"
@@ -759,10 +798,11 @@
     "plugins/ligacao"
     "plugins/objetos_padrao"
     "plugins/auditoria"
+    "plugins/etiqueta"
     "plugins/models/bacia"
     "plugins/models/sarjeta"
     "plugins/models/objetos_tipos"
-    "plugins/registry/metodos"
+    "plugins/registry/metodos_chuva_vazao"
     "plugins/registry/tempo_conc"
     "plugins/registry/hidrograma_tipos"
     "plugins/registry/hietograma_tipos"
@@ -774,6 +814,8 @@
     "views/objetos_tabela"
     "views/objetos_padrao_view"
     "views/auditoria_view"
+    "views/padroes_view"
+    "views/etiqueta_view"
     "views/viewer"
     "views/painel"
     "views/painel_acoes"

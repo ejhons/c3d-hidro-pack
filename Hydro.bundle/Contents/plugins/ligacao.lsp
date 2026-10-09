@@ -447,7 +447,8 @@
 ;; Vazao dos objetos a montante (TODOS, transitivamente; NAO inclui o proprio)
 ;; reavaliada com METODO e TR no tempo tc (capacidade "VAZAO-EM"); as vazoes somam.
 ;; Retorna (("QP" . total|nil) ("VOLUME" . m3|nil) ("ORIGENS" . ((nome . q) ...))
-;;          ("FALTAM" . (nomes sem calculo para este metodo e TR)))
+;;          ("FALTAM" . (nomes sem calculo para este metodo e TR))
+;;          ("AREA" . m2 contribuinte total a montante))
 (defun LIG:VazaoMontante (en metodo tr tc / total vol volok origens faltam e id fn r)
   (setq volok T)
   (foreach e (LIG:Montante en)
@@ -476,6 +477,7 @@
     (cons "VOLUME" (if volok vol nil))
     (cons "ORIGENS" origens)
     (cons "FALTAM" faltam)
+    (cons "AREA" (LIG:AreaMontante en))
   )
 )
 
@@ -838,9 +840,12 @@
 ;;; ------------------------------------------------------------
 (defun LIG:_EscolheMetodo (/ lista itens ult i pos m idx)
   (setq lista (HYDRO:RegList "metodo-chuva-vazao"))
-  (if lista
-    (progn
-      (setq ult (HYDRO:Get "HYDRO.BACIA.METODO" nil))
+  (setq ult (HYDRO:Get "HYDRO.BACIA.METODO" nil))
+  (cond
+    ((null lista) nil)
+    ;; modo automatico: o ultimo metodo usado, sem perguntar
+    ((and (HYDRO:CalcAuto) ult (HYDRO:RegGet "metodo-chuva-vazao" ult)) ult)
+    (T
       (setq i 0 pos 0)
       (foreach m lista
         (if (equal (car m) ult) (setq pos i))
@@ -850,9 +855,9 @@
         (mapcar (function (lambda (x) (cdr (assoc "NOME" (cdr x))))) lista))
       (setq idx
         (HYDRO:Escolher "Metodo usado no calculo das bacias a montante:" itens pos))
+      (HYDRO:Set "HYDRO.BACIA.METODO" (car (nth idx lista)))
       (car (nth idx lista))
     )
-    nil
   )
 )
 
@@ -868,12 +873,197 @@
   out
 )
 
-(defun LIG:CalcularInterativo (en / id tipo tr metodo ent ctx params res
-                                    linhas fn op pt tp tcs comp pr qs ver saida)
+;; Parametros do calculo da ULTIMA vez para METODO e TR (HIDRAULICA, "PARAMS");
+;; se nunca foi calculado, os padroes (projeto > ultimo usado > padrao do tipo)
+(defun LIG:_ParamsAnteriores (en id metodo tr / out r)
+  (foreach r (OBJ:GrupoDe en "HIDRAULICA")
+    (if (and (equal (OBJ:_Val "METODO" r) metodo)
+             (equal (OBJ:_Val "TR" r) tr 1e-9))
+      (setq out (OBJ:_Val "PARAMS" r))
+    )
+  )
+  (if out
+    out
+    (HYDRO:ParamsPadrao (OBJ:Cap id "PARAMS-CALCULO") (strcat "HYDRO.OBJ." id ".calc.") nil)
+  )
+)
+
+;; Calculo SEM perguntas de um objeto que recebe (sarjeta, trecho, estrutura...):
+;; le a ENTRADA dos montantes, aplica o CALCULA do tipo (se tiver), define a SAIDA
+;; (tempo e vazao com a flag de preservacao) e grava ENTRADA, VAZAO e HIDRAULICA.
+;;   params : parametros do calculo do tipo, ou nil para os anteriores/padroes
+;; Retorna (("OK" . T) ("ENTRADA" ..) ("RES" ..) ("COMP" ..) ("PR" ..) ("QS" . q)
+;;          ("TCS" . min) ("PARAMS" ..)) ou (("ERRO" . msg)).
+;; Os montantes precisam estar calculados (LIG:RecalcularMontantes faz isso).
+(defun LIG:CalcularCore (en metodo tr params /
+                         id tipo ent fn res tp tcs comp pr qs)
+  (setq id (OBJ:TipoDe en))
+  (setq tipo (if id (OBJ:TipoDados id) nil))
+  (setq ent (if id (LIG:Entrada en metodo tr) nil))
+  (cond
+    ((not id)
+      (list (cons "ERRO" "Esta entidade nao e um objeto hidraulico. Use OBJETO.")))
+    ((not (cdr (assoc "RECEBE" tipo)))
+      (list (cons "ERRO" (strcat "O tipo '" (OBJ:_NomeTipo id)
+                                 "' nao recebe montantes. Bacias: use BACIA."))))
+    ((not (LIG:ListaMontante en))
+      (list (cons "ERRO" "Este objeto nao tem montante. Ligue bacias ou outros objetos a ele (LIGAR).")))
+    ((cdr (assoc "FALTAM" ent))
+      (list (cons "ERRO" (strcat "Montantes sem calculo para este metodo e TR: "
+                                 (HYDRO:Join (cdr (assoc "FALTAM" ent)) ", ")
+                                 ". Calcule antes, de montante para jusante."))))
+    ((not (cdr (assoc "QP" ent)))
+      (list (cons "ERRO" "Nenhum montante valido: as entidades ligadas nao existem mais (rode HYDROAUDIT).")))
+    (T
+      (if (not params) (setq params (LIG:_ParamsAnteriores en id metodo tr)))
+      ;; calculo proprio do tipo (usa a ENTRADA); sem ele o objeto so repassa
+      (setq fn (OBJ:Cap id "CALCULA"))
+      (setq res
+        (if fn
+          (apply fn
+            (list en
+                  (list (cons "TR" tr) (cons "METODO" metodo) (cons "VAZAO" ent))
+                  params))
+          nil))
+      (if (assoc "ERRO" res)
+        res
+        (progn
+          ;; SAIDA: tempo = regra do modo; vazao = precipitacao no maior tempo
+          (setq tp (cdr (assoc "PERCURSO" res)))
+          (if (not tp) (setq tp 0.0))
+          (setq tcs (LIG:_TcPuro (LIG:_Modo en) tp (cdr (assoc "CHEGADAS" ent))))
+          (setq comp (LIG:VazaoMontante en metodo tr tcs))
+          (setq pr
+            (LIG:Preserva (cdr (assoc "QP" ent))
+                          (cdr (assoc "QP" comp))
+                          (LIG:PreservaAtiva)))
+          (setq qs (car pr))
+          (OBJ:GravarResultado en "ENTRADA"
+            (OBJ:_Limpa
+              (list (cons "METODO" metodo)
+                    (cons "TR" tr)
+                    (cons "QP" (cdr (assoc "QP" ent)))
+                    (cons "TC" (cdr (assoc "TC" ent)))
+                    (cons "AREA" (cdr (assoc "AREA" ent))))))
+          (OBJ:GravarResultado en "VAZAO"
+            (OBJ:_Limpa
+              (list (cons "METODO" metodo)
+                    (cons "TR" tr)
+                    (cons "QP" qs)
+                    (cons "TC" tcs)
+                    (cons "QP-CALC" (cdr (assoc "QP" comp)))
+                    (cons "PRESERVADA" (cadr pr))
+                    (cons "VOLUME" (cdr (assoc "VOLUME" comp))))))
+          (if res
+            (OBJ:GravarResultado en "HIDRAULICA"
+              (OBJ:_Limpa
+                (append
+                  (list (cons "METODO" metodo)
+                        (cons "TR" tr)
+                        (cons "PARAMS" params))
+                  (vl-remove-if
+                    (function
+                      (lambda (x) (member (car x) '("METODO" "TR" "PARAMS"))))
+                    res))))
+          )
+          (HYDRO:Emit "objeto.calculado"
+            (list (cons "OBJETO" en) (cons "TIPO" id)
+                  (cons "METODO" metodo) (cons "TR" tr) (cons "RES" res)))
+          (list (cons "OK" T) (cons "ENTRADA" ent) (cons "RES" res)
+                (cons "COMP" comp) (cons "PR" pr) (cons "QS" qs)
+                (cons "TCS" tcs) (cons "PARAMS" params))
+        )
+      )
+    )
+  )
+)
+
+;; Objetos a montante (transitivos) em ORDEM DE CALCULO: o mais a montante primeiro,
+;; cada um depois dos seus montantes, sem repetir e sem entrar em ciclo.
+;;   acc, stack : chame com nil nil
+(defun LIG:_Ordem (en acc stack / m e)
+  (foreach m (LIG:ListaMontante en)
+    (setq e (LIG:_Existe (car m)))
+    (if (and e (not (member e acc)) (not (member e stack)))
+      (setq acc (append (LIG:_Ordem e acc (cons en stack)) (list e)))
+    )
+  )
+  acc
+)
+
+;; Recalcula UM objeto sem perguntas. Retorna nil se deu certo, ou o texto do erro.
+;; Usa a capacidade "RECALCULA" do tipo; sem ela, o calculo generico (LIG:CalcularCore)
+;; com os parametros da ultima vez.
+(defun LIG:Recalcular (en metodo tr / id fn r)
+  (setq id (OBJ:TipoDe en))
+  (setq fn (if id (OBJ:Cap id "RECALCULA") nil))
+  (cond
+    (fn (apply fn (list en metodo tr)))
+    ((and id (cdr (assoc "RECEBE" (OBJ:TipoDados id))))
+      (setq r (LIG:CalcularCore en metodo tr nil))
+      (if (assoc "ERRO" r) (cdr (assoc "ERRO" r)) nil)
+    )
+    (T "tipo sem calculo")
+  )
+)
+
+;; Recalcula TODOS os montantes de `en` (do mais a montante para jusante) com o
+;; METODO e TR dados. Para no primeiro erro. Retorna nil (ok) ou o texto do erro.
+(defun LIG:RecalcularMontantes (en metodo tr / e erro)
+  (foreach e (LIG:_Ordem en nil nil)
+    (if (not erro)
+      (progn
+        (princ (strcat "\nRecalculando montante: " (OBJ:Nome e) " ..."))
+        (setq erro (LIG:Recalcular e metodo tr))
+        (if erro (setq erro (strcat (OBJ:Nome e) ": " erro)))
+      )
+    )
+  )
+  erro
+)
+
+;; Linhas de texto do resultado de LIG:CalcularCore
+(defun LIG:_LinhasCalculo (en id metodo tr r / ent comp pr res fn)
+  (setq ent (cdr (assoc "ENTRADA" r)))
+  (setq comp (cdr (assoc "COMP" r)))
+  (setq pr (cdr (assoc "PR" r)))
+  (setq res (cdr (assoc "RES" r)))
+  (setq fn (OBJ:Cap id "FORMATA"))
+  (append
+    (list (strcat "OBJETO " (OBJ:Nome en) "  (" (OBJ:_NomeTipo id) ")")
+          (strcat "TR " (HYDRO:FmtReal tr) " anos  |  "
+                  (cdr (assoc "NOME" (HYDRO:RegGet "metodo-chuva-vazao" metodo))))
+          (strcat "ENTRADA: Q = " (rtos (cdr (assoc "QP" ent)) 2 3)
+                  " m3/s   tc = " (rtos (cdr (assoc "TC" ent)) 2 1) " min   ("
+                  (itoa (length (cdr (assoc "ORIGENS" ent)))) " montante(s), "
+                  (rtos (/ (cdr (assoc "AREA" ent)) 10000.0) 2 3) " ha)")
+          (strcat "SAIDA:   Q = " (rtos (cdr (assoc "QS" r)) 2 3) " m3/s   tc = "
+                  (rtos (cdr (assoc "TCS" r)) 2 1) " min"
+                  (if (cadr pr)
+                    (strcat "   (preservada a vazao de entrada; calculada no tc maximo: "
+                            (rtos (cdr (assoc "QP" comp)) 2 3) ")")
+                    "")))
+    (OBJ:LinhasAtrib en)
+    (OBJ:LinhaParams "Parametros do calculo" (cdr (assoc "PARAMS" r)))
+    (if (cdr (assoc "FALTAM" comp))
+      (list (strcat "ATENCAO: sem calculo para este metodo/TR: "
+                    (HYDRO:Join (cdr (assoc "FALTAM" comp)) ", ")))
+    )
+    (if res
+      (if fn (apply fn (list res)) (LIG:_FormataPadrao res))
+      (list "(tipo sem calculo hidraulico: so repassa a vazao)"))
+  )
+)
+
+;; CALCULAOBJETO. Recalcula antes os montantes, pergunta TR, metodo e parametros
+;; (nao pergunta nada no modo automatico, CALCAUTO) e mostra entrada e saida.
+(defun LIG:CalcularInterativo (en / id tipo tr metodo erro params r auto
+                                    linhas op pt)
   (if en
     (progn
       (setq id (OBJ:TipoDe en))
       (setq tipo (if id (OBJ:TipoDados id) nil))
+      (setq auto (HYDRO:CalcAuto))
       (cond
         ((not id)
           (alert "Esta entidade nao e um objeto hidraulico. Use OBJETO."))
@@ -881,119 +1071,48 @@
           (alert (strcat "O tipo '" (OBJ:_NomeTipo id) "' nao recebe montantes. Bacias: use BACIA.")))
         (T
           (setq tr
-            (HYDRO:AskReal "Tempo de retorno (anos)" (HYDRO:Get "HYDRO.TR" nil)))
+            (if (and auto (HYDRO:Get "HYDRO.TR" nil))
+              (HYDRO:Get "HYDRO.TR" nil)
+              (HYDRO:AskReal "Tempo de retorno (anos)" (HYDRO:Get "HYDRO.TR" nil))))
           (setq metodo (LIG:_EscolheMetodo))
           (cond
             ((or (not tr) (<= tr 0.0)) (alert "Tempo de retorno nao informado."))
             ((not metodo) (alert "Nenhum metodo chuva-vazao cadastrado."))
             (T
               (HYDRO:Set "HYDRO.TR" tr)
-              (setq ent (LIG:Entrada en metodo tr))
-              (cond
-                ((not (LIG:ListaMontante en))
-                  (alert "Este objeto nao tem montante. Ligue bacias ou outros objetos a ele (LIGAR)."))
-                ((cdr (assoc "FALTAM" ent))
-                  (alert
-                    (strcat
-                      "Montantes sem calculo para este metodo e TR: "
-                      (HYDRO:Join (cdr (assoc "FALTAM" ent)) ", ")
-                      "\nCalcule antes, de montante para jusante (BACIA, CALCULAOBJETO)."))
-                )
-                ((not (cdr (assoc "QP" ent)))
-                  (alert "Nenhum montante valido: as entidades ligadas nao existem mais (rode HYDROAUDIT)."))
-                (T
+              ;; todos os montantes sao recalculados antes, em ordem
+              (setq erro (LIG:RecalcularMontantes en metodo tr))
+              (if erro
+                (alert (strcat "Nao foi possivel recalcular os montantes:\n" erro))
+                (progn
                   (setq params
-                    (HYDRO:AskParams
-                      (OBJ:Cap id "PARAMS-CALCULO")
-                      (strcat "HYDRO.OBJ." id ".calc.") nil))
-                  ;; calculo proprio do tipo (usa a ENTRADA); sem ele o objeto so repassa
-                  (setq fn (OBJ:Cap id "CALCULA"))
-                  (setq res
-                    (if fn
-                      (apply fn
-                        (list en
-                              (list (cons "TR" tr) (cons "METODO" metodo) (cons "VAZAO" ent))
-                              params))
-                      nil))
-                  (if (assoc "ERRO" res)
-                    (alert (strcat "Erro: " (cdr (assoc "ERRO" res))))
+                    (if auto
+                      (LIG:_ParamsAnteriores en id metodo tr)
+                      (HYDRO:AskParams
+                        (OBJ:Cap id "PARAMS-CALCULO")
+                        (strcat "HYDRO.OBJ." id ".calc.")
+                        (LIG:_ParamsAnteriores en id metodo tr))))
+                  (setq r (LIG:CalcularCore en metodo tr params))
+                  (if (assoc "ERRO" r)
+                    (alert (strcat "Erro: " (cdr (assoc "ERRO" r))))
                     (progn
-                      ;; SAIDA: tempo = regra do modo; vazao = precipitacao no maior tempo
-                      (setq tp (cdr (assoc "PERCURSO" res)))
-                      (if (not tp) (setq tp 0.0))
-                      (setq tcs (LIG:_TcPuro (LIG:_Modo en) tp (cdr (assoc "CHEGADAS" ent))))
-                      (setq comp (LIG:VazaoMontante en metodo tr tcs))
-                      (setq pr
-                        (LIG:Preserva (cdr (assoc "QP" ent))
-                                      (cdr (assoc "QP" comp))
-                                      (LIG:PreservaAtiva)))
-                      (setq qs (car pr))
-                      (OBJ:GravarResultado en "ENTRADA"
-                        (OBJ:_Limpa
-                          (list (cons "METODO" metodo)
-                                (cons "TR" tr)
-                                (cons "QP" (cdr (assoc "QP" ent)))
-                                (cons "TC" (cdr (assoc "TC" ent)))
-                                (cons "AREA" (cdr (assoc "AREA" ent))))))
-                      (OBJ:GravarResultado en "VAZAO"
-                        (OBJ:_Limpa
-                          (list (cons "METODO" metodo)
-                                (cons "TR" tr)
-                                (cons "QP" qs)
-                                (cons "TC" tcs)
-                                (cons "QP-CALC" (cdr (assoc "QP" comp)))
-                                (cons "PRESERVADA" (cadr pr))
-                                (cons "VOLUME" (cdr (assoc "VOLUME" comp))))))
-                      (if res
-                        (OBJ:GravarResultado en "HIDRAULICA"
-                          (OBJ:_Limpa
-                            (append
-                              (list (cons "METODO" metodo)
-                                    (cons "TR" tr)
-                                    (cons "PARAMS" params))
-                              (vl-remove-if
-                                (function
-                                  (lambda (x) (member (car x) '("METODO" "TR" "PARAMS"))))
-                                res))))
-                      )
-                      (HYDRO:Emit "objeto.calculado"
-                        (list (cons "OBJETO" en) (cons "TIPO" id)
-                              (cons "METODO" metodo) (cons "TR" tr) (cons "RES" res)))
-                      (setq fn (OBJ:Cap id "FORMATA"))
-                      (setq linhas
-                        (append
-                          (list (strcat "OBJETO " (OBJ:Nome en)
-                                        "  (" (OBJ:_NomeTipo id) ")")
-                                (strcat "TR " (HYDRO:FmtReal tr) " anos  |  "
-                                        (cdr (assoc "NOME" (HYDRO:RegGet "metodo-chuva-vazao" metodo))))
-                                (strcat "ENTRADA: Q = " (rtos (cdr (assoc "QP" ent)) 2 3)
-                                        " m3/s   tc = " (rtos (cdr (assoc "TC" ent)) 2 1) " min   ("
-                                        (itoa (length (cdr (assoc "ORIGENS" ent)))) " montante(s), "
-                                        (rtos (/ (cdr (assoc "AREA" ent)) 10000.0) 2 3) " ha)")
-                                (strcat "SAIDA:   Q = " (rtos qs 2 3) " m3/s   tc = "
-                                        (rtos tcs 2 1) " min"
-                                        (if (cadr pr)
-                                          (strcat "   (preservada a vazao de entrada; calculada no tc maximo: "
-                                                  (rtos (cdr (assoc "QP" comp)) 2 3) ")")
-                                          "")))
-                          (if (cdr (assoc "FALTAM" comp))
-                            (list (strcat "ATENCAO: sem calculo para este metodo/TR: "
-                                          (HYDRO:Join (cdr (assoc "FALTAM" comp)) ", ")))
-                          )
-                          (if res
-                            (if fn (apply fn (list res)) (LIG:_FormataPadrao res))
-                            (list "(tipo sem calculo hidraulico: so repassa a vazao)"))))
-                      (alert (HYDRO:Join linhas "\n"))
-                      (initget "Sim Nao")
-                      (setq op
-                        (getkword "\nInserir o resultado como texto no desenho? [Sim/Nao] <Nao>: "))
-                      (if (equal op "Sim")
+                      (setq linhas (LIG:_LinhasCalculo en id metodo tr r))
+                      (if auto
+                        (foreach op linhas (princ (strcat "\n" op)))
                         (progn
-                          (setq pt (getpoint "\nSelecione o local de insercao do texto: "))
-                          (if pt
-                            (HYDRO:Mtext pt (HYDRO:Join linhas "\\P")
-                              (HYDRO:Get "HYDRO.TEXT.HEIGHT" 1.8)
-                              (HYDRO:Get "HYDRO.TEXT.ROTATION" 0.0)))
+                          (alert (HYDRO:Join linhas "\n"))
+                          (initget "Sim Nao")
+                          (setq op
+                            (getkword "\nInserir o resultado como texto no desenho? [Sim/Nao] <Nao>: "))
+                          (if (equal op "Sim")
+                            (progn
+                              (setq pt (getpoint "\nSelecione o local de insercao do texto: "))
+                              (if pt
+                                (HYDRO:Mtext pt (HYDRO:Join linhas "\\P")
+                                  (HYDRO:Get "HYDRO.TEXT.HEIGHT" 1.8)
+                                  (HYDRO:Get "HYDRO.TEXT.ROTATION" 0.0)))
+                            )
+                          )
                         )
                       )
                     )
@@ -1005,6 +1124,77 @@
         )
       )
     )
+  )
+  (princ)
+)
+
+;; Oferece LIGAR um objeto recem criado antes de seguir. Nao pergunta se ele ja
+;; tem montante ou destino. Montante: objetos que descarregam NELE; Destino: onde
+;; ELE descarrega.
+(defun LIG:OferecerLigacao (en / id dados recebe emite ops op ss origens comp n r o)
+  (setq id (OBJ:TipoDe en))
+  (if (and id (null (LIG:ListaMontante en)) (null (LIG:Destinos en)))
+    (progn
+      (setq dados (OBJ:TipoDados id))
+      (setq recebe (cdr (assoc "RECEBE" dados)))
+      (setq emite (cdr (assoc "EMITE" dados)))
+      (setq ops
+        (append (if recebe (list "Montante") nil)
+                (if emite (list "Destino") nil)
+                (list "Nao")))
+      (if (> (length ops) 1)
+        (progn
+          (initget (HYDRO:Join ops " "))
+          (setq op
+            (getkword
+              (strcat "\nLigar " (OBJ:Nome en) " a outro objeto agora? ["
+                      (HYDRO:Join ops "/") "] <Nao>: ")))
+          (cond
+            ((equal op "Montante")
+              (princ "\nSelecione os objetos de MONTANTE (os que descarregam neste; Enter para terminar): ")
+              (setq ss (ssget))
+              (if ss
+                (progn
+                  (setq origens (vl-remove en (LIG:_Origens ss)))
+                  (if origens
+                    (progn
+                      (setq comp (LIG:_PedeCompartilha en))
+                      (setq n 0)
+                      (foreach o origens
+                        (setq r (LIG:Conectar o en comp))
+                        (if (assoc "ERRO" r)
+                          (princ (strcat "\n" (OBJ:Nome o) ": " (cdr (assoc "ERRO" r))))
+                          (setq n (1+ n))
+                        )
+                      )
+                      (princ (strcat "\n" (itoa n) " montante(s) ligado(s)."))
+                    )
+                  )
+                )
+              )
+            )
+            ((equal op "Destino")
+              (LIG:LigarInterativo (list en))
+            )
+          )
+        )
+      )
+    )
+  )
+  (princ)
+)
+
+;; Flag do modo automatico dos calculos
+(defun c:CALCAUTO (/ op ativo)
+  (setq ativo (HYDRO:CalcAuto))
+  (princ
+    (strcat "\nModo automatico dos calculos: " (if ativo "LIGADO" "DESLIGADO")
+            "\n(Ligado: BACIA e CALCULAOBJETO usam o ultimo TR, metodo e parametros sem perguntar.)"))
+  (initget "Sim Nao")
+  (setq op
+    (getkword (strcat "\nLigar o modo automatico? [Sim/Nao] <" (if ativo "Sim" "Nao") ">: ")))
+  (if op
+    (HYDRO:Set "HYDRO.CALC.AUTO" (if (equal op "Sim") 1 0))
   )
   (princ)
 )
@@ -1036,6 +1226,7 @@
 ;;; ------------------------------------------------------------
 (HYDRO:On "objeto.removido" "ligacao" 'LIG:_OnObjetoRemovido)
 
+(HYDRO:SetLabel "HYDRO.CALC.AUTO" "Modo automatico dos calculos, sem perguntas (1 = sim)" "")
 (HYDRO:SetLabel "HYDRO.VAZAO.PRESERVA" "Preservar a maior vazao entre entrada e saida (1 = sim)" "")
 
 (HYDRO:Provide "ligacao" "3.0")

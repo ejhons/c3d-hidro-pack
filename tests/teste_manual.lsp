@@ -197,9 +197,9 @@
     )
   )
 
-  (if (HYDRO:Has "metodos")
+  (if (HYDRO:Has "metodos-chuva-vazao")
     (progn
-      (HT:Section "metodos")
+      (HT:Section "metodos-chuva-vazao")
       (setq antigos (HT:IdfSet))
       (setq res
         (MET:Racional '(("AREA" . 10000.0) ("TC" . 20.0) ("TR" . 10.0)) '(("C" . 0.8))))
@@ -266,7 +266,7 @@
           )
         )
       )
-      (if (HYDRO:Has "metodos")
+      (if (HYDRO:Has "metodos-chuva-vazao")
         (progn
           (setq antigos (HT:IdfSet))
           (setq res
@@ -941,7 +941,7 @@
 (defun HT:_AudR (probs) (length probs))
 (defun HT:_AudErro () (/ 1 0))
 
-(defun HT:Run (/ r hits n antigos hid hid2 res)
+(defun HT:Run (/ r hits n antigos hid hid2 res defs)
   (princ "\n=== TESTES HYDRO ===")
   (setq r nil)
 
@@ -1150,6 +1150,60 @@
       )
     )
   )
+
+  (HT:Section "etiquetas (substituicao de campos)")
+  (setq r
+    (append r
+      (list
+        (HT:Check "ETQ:Substitui troca os campos"
+          (equal (ETQ:Substitui "A={A} B={B}" (function (lambda (n) (cdr (assoc n '(("A" . "1") ("B" . "xx")))))))
+                 "A=1 B=xx"))
+        (HT:Check "ETQ:Substitui: campo desconhecido vira ?"
+          (equal (ETQ:Substitui "x{Z}y" (function (lambda (n) nil))) "x?y"))
+        (HT:Check "ETQ:Substitui: campos colados e texto sem campo"
+          (equal (ETQ:Substitui "{A}{B}!" (function (lambda (n) n))) "AB!"))
+        (HT:Check "ETQ:Substitui: chave sem fechar fica como esta"
+          (equal (ETQ:Substitui "a {A" (function (lambda (n) "1"))) "a {A"))
+        (HT:Check "ETQ:_CI ignora maiusculas"
+          (equal (ETQ:_CI "cn" '(("C" . 0.6) ("CN" . 80.0))) '("CN" . 80.0)))
+        (HT:Check "ETQ:_Fmt: real<1 com 4 casas, real>=1 com 3, T = sim"
+          (and (equal (ETQ:_Fmt 0.0123) "0.0123") (equal (ETQ:_Fmt 3.14159) "3.142")
+               (equal (ETQ:_Fmt T) "sim")))
+      )
+    )
+  )
+
+  (HT:Section "padroes do projeto")
+  (setq r
+    (append r
+      (list
+        (HT:Check "HYDRO:PadraoKey troca HYDRO. por HYDRO.PADRAO."
+          (equal (HYDRO:PadraoKey "HYDRO.MET.racional." "C") "HYDRO.PADRAO.MET.racional.C"))
+        (HT:Check "HYDRO:ParamsPadrao: sem nada = padrao do metodo"
+          (progn
+            (setq defs '(("C" "x" 0.6 "")))
+            (HT:Near (cdr (car (HYDRO:ParamsPadrao defs "HYDRO.TST." nil))) 0.6 1e-9)))
+        (HT:Check "HYDRO:ParamsPadrao: ultimo usado vence o padrao do metodo"
+          (progn
+            (HYDRO:Set "HYDRO.TST.C" 0.5)
+            (HT:Near (cdr (car (HYDRO:ParamsPadrao defs "HYDRO.TST." nil))) 0.5 1e-9)))
+        (HT:Check "HYDRO:ParamsPadrao: padrao do projeto vence o ultimo usado"
+          (progn
+            (HYDRO:Set "HYDRO.PADRAO.TST.C" 0.4)
+            (HT:Near (cdr (car (HYDRO:ParamsPadrao defs "HYDRO.TST." nil))) 0.4 1e-9)))
+        (HT:Check "HYDRO:ParamsPadrao: sobrescrita (atributo) vence tudo"
+          (HT:Near (cdr (car (HYDRO:ParamsPadrao defs "HYDRO.TST." '(("C" . 0.3))))) 0.3 1e-9))
+        (HT:Check "HYDRO:CalcAuto: desligado por padrao e liga com 1"
+          (progn
+            (HYDRO:Del "HYDRO.CALC.AUTO")
+            (and (null (HYDRO:CalcAuto))
+                 (progn (HYDRO:Set "HYDRO.CALC.AUTO" 1) (HYDRO:CalcAuto)))))
+      )
+    )
+  )
+  (HYDRO:Del "HYDRO.TST.C")
+  (HYDRO:Del "HYDRO.PADRAO.TST.C")
+  (HYDRO:Del "HYDRO.CALC.AUTO")
 
   (if (HYDRO:Has "auditoria")
     (progn

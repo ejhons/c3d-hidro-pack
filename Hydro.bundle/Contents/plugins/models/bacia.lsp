@@ -760,6 +760,25 @@
           (if qp (strcat "  |  Qp " (rtos qp 2 3) " m3/s") ""))
 )
 
+;; Valor de um atributo (C, CN) para texto: o da bacia; senao o padrao do projeto
+;; (PADROES) ou o ultimo usado, com a origem entre parenteses; senao "nao definido".
+(defun BAC:_FmtAtrib (chave atrib prefixo / v p u)
+  (setq v (BAC:_Val chave atrib))
+  (setq p (HYDRO:Padrao prefixo chave))
+  (setq u (HYDRO:Get (strcat prefixo chave) nil))
+  (cond
+    (v (BAC:_FmtP v))
+    (p (strcat (BAC:_FmtP p) " (padrao do projeto)"))
+    (u (strcat (BAC:_FmtP u) " (ultimo usado)"))
+    (T "nao definido")
+  )
+)
+
+;; valor de parametro para texto (numero ou texto)
+(defun BAC:_FmtP (v)
+  (if (numberp v) (HYDRO:FmtReal v) (vl-princ-to-string v))
+)
+
 ;; Linhas de identificacao e caracteristicas
 (defun BAC:LinhasCadastro (dados h / c atrib tc)
   (setq c (BAC:Caract dados))
@@ -778,17 +797,18 @@
       (list (strcat "tc = " (rtos (BAC:_Val "MIN" tc) 2 2) " min ("
                     (BAC:_NomeTc (BAC:_Val "ORIGEM" tc)) ")"))
     )
-    (if atrib
-      (list
-        (HYDRO:Join
-          (mapcar
-            (function (lambda (p) (strcat (car p) " = " (HYDRO:FmtReal (cdr p)))))
-            atrib
-          )
-          "   "
-        )
-      )
-    )
+    ;; sempre mostra C e CN com o valor que vale (da bacia, ou do projeto/ultimo usado)
+    (list
+      (strcat "Atributos: C = " (BAC:_FmtAtrib "C" atrib "HYDRO.MET.racional.")
+              "   CN = " (BAC:_FmtAtrib "CN" atrib "HYDRO.MET.scs-cn.")
+              (HYDRO:Join
+                (cons ""
+                  (mapcar
+                    (function (lambda (p) (strcat (car p) " = " (BAC:_FmtP (cdr p)))))
+                    (vl-remove-if
+                      (function (lambda (p) (member (car p) '("C" "CN"))))
+                      atrib)))
+                "   ")))
   )
 )
 
@@ -797,6 +817,15 @@
   (append
     (list (strcat "[" (BAC:_NomeMetodo (BAC:_Val "METODO" vaz))
                   " - TR " (HYDRO:FmtReal (BAC:_Val "TR" vaz)) " anos]"))
+    (if (BAC:_Val "PARAMS" vaz)
+      (list
+        (strcat "Parametros: "
+          (HYDRO:Join
+            (mapcar
+              (function (lambda (p) (strcat (car p) " = " (BAC:_FmtP (cdr p)))))
+              (BAC:_Val "PARAMS" vaz))
+            "   ")))
+    )
     (if (BAC:_Val "I" vaz)
       (list (strcat "i = " (rtos (BAC:_Val "I" vaz) 2 2) " mm/h"
                     (if (BAC:_Val "P" vaz)
@@ -945,6 +974,7 @@
       (cons "RESUMO" 'BAC:_ObjResumo)
       (cons "TOSTRING" 'BAC:ToString)
       (cons "VAZAO-EM" 'BAC:_ObjVazaoEm)
+      (cons "RECALCULA" 'BAC:_ObjRecalcula)
       (cons "TEMPO-MODO" "concentracao")
       (cons "AREA-PROPRIA" 'BAC:_ObjArea)
       (cons "DESTINO-PADRAO" 'BAC:_ObjTalvegue)
@@ -1073,10 +1103,30 @@
   (if (and r (/= r "")) r atual)
 )
 
-;; Pergunta os atributos C e CN (Enter mantem/pula)
+;; Pergunta um real opcional: Enter mantem o valor da bacia (se houver)
+(defun BAC:_PedeOpcional (msg atual padrao / r)
+  (setq r
+    (getreal
+      (strcat "\n" msg " (Enter = "
+              (cond
+                (atual (strcat "manter " (rtos atual 2 3)))
+                (padrao (strcat "padrao do projeto " (rtos padrao 2 3)))
+                (T "pular"))
+              "): ")))
+  (if r r atual)
+)
+
+;; Pergunta os atributos C e CN. Enter mantem o da bacia; sem nenhum, a bacia fica
+;; sem o atributo e vale o padrao do projeto (comando PADROES) na hora de calcular.
 (defun BAC:_PedeAtrib (atrib / c cn)
-  (setq c  (HYDRO:AskReal "Coeficiente de escoamento C (Enter = manter/pular)" (BAC:_Val "C" atrib)))
-  (setq cn (HYDRO:AskReal "Numero da curva CN (Enter = manter/pular)" (BAC:_Val "CN" atrib)))
+  (setq c
+    (BAC:_PedeOpcional "Coeficiente de escoamento C"
+                       (BAC:_Val "C" atrib)
+                       (HYDRO:Padrao "HYDRO.MET.racional." "C")))
+  (setq cn
+    (BAC:_PedeOpcional "Numero da curva CN"
+                       (BAC:_Val "CN" atrib)
+                       (HYDRO:Padrao "HYDRO.MET.scs-cn." "CN")))
   (if (and c (or (<= c 0.0) (> c 1.0)))
     (progn (princ "\nC deve estar entre 0 e 1: ignorado.") (setq c (BAC:_Val "C" atrib)))
   )
@@ -1109,6 +1159,10 @@
               (cons "ORIGEM" (nth 1 tcr))
               (cons "PARAMS" (nth 2 tcr))))
       (BAC:Cadastrar contorno talvegue nome atrib caract tc)
+      ;; bacia NOVA: oferece ligar a outros objetos antes de seguir
+      (if (and (null dados) (HYDRO:Has "ligacao"))
+        (LIG:OferecerLigacao contorno)
+      )
       (BAC:_Ctx (BAC:Ler contorno))
     )
   )
@@ -1186,15 +1240,31 @@
 
 ;; Pergunta TR, metodo, duracao e parametros. Retorna alist
 ;; (TR ID DUR PARAMS) ou nil.
-(defun BAC:_PerguntasCalculo (cad / tr id m dur params)
-  (setq tr (HYDRO:AskReal "Tempo de retorno (anos)" (HYDRO:Get "HYDRO.TR" nil)))
+(defun BAC:_PerguntasCalculo (cad / tr id m dur params auto)
+  (setq id (HYDRO:Get "HYDRO.BACIA.METODO" nil))
+  ;; modo automatico (CALCAUTO): ultimo TR e metodo, sem perguntas
+  (setq auto
+    (if (and (HYDRO:CalcAuto)
+             (HYDRO:Get "HYDRO.TR" nil)
+             id
+             (HYDRO:RegGet "metodo-chuva-vazao" id))
+      T
+      nil))
+  (if auto
+    (princ (strcat "\nModo automatico: TR " (HYDRO:FmtReal (HYDRO:Get "HYDRO.TR" nil))
+                   " anos, metodo " (BAC:_NomeMetodo id)))
+  )
+  (setq tr
+    (if auto
+      (HYDRO:Get "HYDRO.TR" nil)
+      (HYDRO:AskReal "Tempo de retorno (anos)" (HYDRO:Get "HYDRO.TR" nil))))
   (cond
     ((or (not tr) (<= tr 0.0))
       (alert "Tempo de retorno nao informado.")
       nil
     )
     (T
-      (setq id (BAC:_EscolheMetodo))
+      (if (not auto) (setq id (BAC:_EscolheMetodo)))
       (if (not id)
         (progn (alert "Metodo nao escolhido.") nil)
         (progn
@@ -1202,16 +1272,21 @@
           (HYDRO:Set "HYDRO.TR" tr)
           (HYDRO:Set "HYDRO.BACIA.METODO" id)
           (setq dur
-            (if (cdr (assoc "USA-DUR" m))
+            (if (and (cdr (assoc "USA-DUR" m)) (not auto))
               (HYDRO:AskReal "Duracao da chuva (min)" (BAC:_Val "TC" cad))
               (BAC:_Val "TC" cad)
             )
           )
           (setq params
-            (HYDRO:AskParams
-              (cdr (assoc "PARAMS" m))
-              (strcat "HYDRO.MET." id ".")
-              (BAC:_Sobrescritas cad (cdr (assoc "PARAMS" m)))
+            (if auto
+              (HYDRO:ParamsPadrao
+                (cdr (assoc "PARAMS" m))
+                (strcat "HYDRO.MET." id ".")
+                (BAC:_Sobrescritas cad (cdr (assoc "PARAMS" m))))
+              (HYDRO:AskParams
+                (cdr (assoc "PARAMS" m))
+                (strcat "HYDRO.MET." id ".")
+                (BAC:_Sobrescritas cad (cdr (assoc "PARAMS" m))))
             )
           )
           (list (cons "TR" tr) (cons "ID" id) (cons "DUR" dur) (cons "PARAMS" params))
@@ -1221,9 +1296,61 @@
   )
 )
 
+;; Recalcula os montantes da bacia (em ordem) antes de calcula-la. nil = ok, ou o erro.
+(defun BAC:_RecalcMontantes (contorno perg)
+  (if (and (HYDRO:Has "ligacao") (LIG:Afluentes contorno))
+    (LIG:RecalcularMontantes contorno (BAC:_Val "ID" perg) (BAC:_Val "TR" perg))
+    nil
+  )
+)
+
+;; Capacidade "RECALCULA": recalcula a bacia SEM perguntas para METODO e TR, com os
+;; parametros do ultimo calculo (ou os padroes do projeto). Retorna nil ou o erro (texto).
+;; Os montantes dela ja devem ter sido recalculados (quem chama ordena).
+(defun BAC:_ObjRecalcula (en metodo tr / dados h talv cad m ant c params dur calc)
+  (setq dados (BAC:Ler en))
+  (setq h (BAC:Talvegue dados))
+  (setq talv (if h (handent h) nil))
+  (setq m (HYDRO:RegGet "metodo-chuva-vazao" metodo))
+  (cond
+    ((not (HYDRO:EntValida talv)) "Bacia sem talvegue valido (use BACIACAD).")
+    ((not m) (strcat "Metodo nao cadastrado: " metodo))
+    (T
+      (setq cad (BAC:Obter en talv))
+      (if (assoc "ERRO" cad)
+        (BAC:_Val "ERRO" cad)
+        (progn
+          (foreach c (BAC:Vazao (BAC:Ler en))
+            (if (and (equal (BAC:_Val "METODO" c) metodo)
+                     (equal (BAC:_Val "TR" c) tr 1e-9))
+              (setq ant c)
+            )
+          )
+          (setq params
+            (if ant
+              (BAC:_Val "PARAMS" ant)
+              (HYDRO:ParamsPadrao
+                (cdr (assoc "PARAMS" m))
+                (strcat "HYDRO.MET." metodo ".")
+                (BAC:_Sobrescritas cad (cdr (assoc "PARAMS" m))))))
+          (setq dur
+            (if (and ant (cdr (assoc "USA-DUR" m)) (BAC:_Val "DUR" ant))
+              (BAC:_Val "DUR" ant)
+              (BAC:_Val "TC" cad)))
+          (setq calc
+            (BAC:_CalcularEGravar en talv cad
+              (list (cons "TR" tr) (cons "ID" metodo) (cons "DUR" dur)
+                    (cons "PARAMS" params))))
+          (if (assoc "ERRO" calc) (BAC:_Val "ERRO" calc) nil)
+        )
+      )
+    )
+  )
+)
+
 ;; Fluxo completo: contorno, talvegue, cadastro (se preciso), perguntas e
 ;; calculo. Retorna (contorno . calculo) ou nil.
-(defun BAC:_FluxoCalculo (/ contorno dados talv cad perg calc)
+(defun BAC:_FluxoCalculo (/ contorno dados talv cad perg calc erro)
   (setq contorno (BAC:_SelLinha "\nSelecione a polilinha do CONTORNO da bacia: "))
   (cond
     ((not contorno) nil)
@@ -1236,7 +1363,7 @@
       (cond
         ((not talv) (princ "\nTalvegue nao selecionado.") nil)
         ((not (HYDRO:RegList "metodo-chuva-vazao"))
-          (alert "Nenhum metodo chuva-vazao cadastrado (plugin 'metodos').")
+          (alert "Nenhum metodo chuva-vazao cadastrado (plugin 'metodos-chuva-vazao').")
           nil
         )
         (T
@@ -1262,7 +1389,12 @@
               (setq perg (BAC:_PerguntasCalculo cad))
               (if perg
                 (progn
-                  (setq calc (BAC:_CalcularEGravar contorno talv cad perg))
+                  ;; montantes recalculados antes, em ordem, sem o usuario precisar
+                  (setq erro (BAC:_RecalcMontantes contorno perg))
+                  (setq calc
+                    (if erro
+                      (BAC:_Erro (strcat "Montante: " erro))
+                      (BAC:_CalcularEGravar contorno talv cad perg)))
                   (cond
                     ((assoc "ERRO" calc)
                       (alert (strcat "Erro: " (BAC:_Val "ERRO" calc)))
@@ -1298,9 +1430,17 @@
   (princ)
 )
 
+;; Mostra o resumo: alert, ou so a linha de comando no modo automatico (CALCAUTO)
+(defun BAC:_Mostra (texto)
+  (if (HYDRO:CalcAuto)
+    (princ (strcat "\n" texto))
+    (alert texto)
+  )
+)
+
 (defun c:BACIA (/ r)
   (setq r (BAC:_FluxoCalculo))
-  (if r (alert (BAC:_Resumo (car r) (cdr r))))
+  (if r (BAC:_Mostra (BAC:_Resumo (car r) (cdr r))))
   (princ)
 )
 

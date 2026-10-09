@@ -33,6 +33,10 @@
 ;;;                                chuva-vazao (alist com "QP", opcional "VOLUME")
 ;;;                                gerado por ESTE objeto sozinho, reavaliado no tc
 ;;;                                dado, ou nil (sem calculo). Ex.: bacia
+;;;       ("RECALCULA" . fn)       (fn en metodo tr) -> nil se recalculou, ou STRING com o
+;;;                                erro; recalculo SEM perguntas, usado para atualizar os
+;;;                                montantes (sem ela, o tipo usa o calculo generico de
+;;;                                ligacao.lsp). Ex.: bacia
 ;;;       ("TEMPO-MODO" . texto)   "concentracao" (bacia) ou "percurso" (padrao):
 ;;;                                como o tempo de saida combina os montantes
 ;;;                                (ver ligacao.lsp)
@@ -720,6 +724,32 @@
   out
 )
 
+;; Linhas "Atributos:" com os valores de ATRIB do objeto (definidos pelo usuario),
+;; com rotulo e unidade do tipo. nil se o objeto nao tem atributos.
+(defun OBJ:LinhasAtrib (en / id out p)
+  (setq id (OBJ:TipoDe en))
+  (foreach p (OBJ:AtribDe en)
+    (setq out
+      (append out
+        (list (strcat "  " (OBJ:_RotuloParam id (car p)) ": " (OBJ:_FmtVal (cdr p))))))
+  )
+  (if out (cons "Atributos:" out) nil)
+)
+
+;; Uma linha "<titulo>: k = v   k = v" para uma alist de parametros (nil se vazia)
+(defun OBJ:LinhaParams (titulo params)
+  (if params
+    (list
+      (strcat titulo ": "
+              (HYDRO:Join
+                (mapcar
+                  (function (lambda (p) (strcat (car p) " = " (OBJ:_FmtVal (cdr p)))))
+                  params)
+                "   ")))
+    nil
+  )
+)
+
 ;; Linhas de resumo do objeto (usa a capacidade RESUMO do tipo, se houver)
 ;;   en : ename
 ;;   retorno: lista de strings, uma por linha (para alert, tabelas...)
@@ -845,7 +875,13 @@
               (append exist pad)))
           (setq novo (OBJ:Cadastrar en id params nome))
           (if novo
-            novo
+            (progn
+              ;; objeto NOVO: oferece ligar a outros objetos antes de seguir
+              (if (and (null reg) (HYDRO:Has "ligacao"))
+                (LIG:OferecerLigacao en)
+              )
+              novo
+            )
             (progn (alert "Nao foi possivel gravar os dados na entidade.") nil)
           )
         )

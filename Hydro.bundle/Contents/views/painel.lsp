@@ -80,7 +80,7 @@
 )
 
 (defun PNL:_MacroEstilo ()
-  (HYDRO:Get "HYDRO.MACRO.ESTILO" "lisp")
+  (HYDRO:Get "HYDRO.MACRO.ESTILO" "nome")
 )
 
 (defun PNL:_MacroDe (cmd estilo)

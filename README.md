@@ -34,13 +34,14 @@ Hydro/
 │       │   ├─ objetos.lsp        ← OBJ:  objetos hidráulicos genéricos (catálogo de tipos)
 │       │   ├─ ligacao.lsp        ← LIG:  ligações de descarga entre objetos + integridade
 │       │   ├─ objetos_padrao.lsp ← OPD:  consultas padrão dos objetos (busca, vínculos de PARAMS)
+│       │   ├─ etiqueta.lsp       ← ETQ:  etiquetas dinâmicas e tabela viva (atualizam por eventos)
 │       │   ├─ auditoria.lsp      ← AUD:  catálogo de verificações/correções do desenho
 │       │   ├─ models/            ← OBJETOS: só a funcionalidade do objeto
 │       │   │   ├─ bacia.lsp          ← BAC:  bacia (contorno + talvegue): registro, tc, vazão, tipo
 │       │   │   ├─ sarjeta.lsp        ← SOB:  sarjeta: seções, geometria, Izzard, tipo
 │       │   │   └─ objetos_tipos.lsp  ← OTP:  trecho, estrutura, tubo-c3d
 │       │   └─ registry/          ← CATÁLOGOS: só cadastros de métodos e tipos
-│       │       ├─ metodos.lsp          ← MET:  métodos chuva-vazão
+│       │       ├─ metodos_chuva_vazao.lsp ← MET:  métodos chuva-vazão
 │       │       ├─ tempo_conc.lsp       ← TCM:  métodos de tempo de concentração
 │       │       ├─ hidrograma_tipos.lsp ← HID:  tipos de hidrograma
 │       │       └─ hietograma_tipos.lsp ← HIET: tipos de hietograma
@@ -130,6 +131,11 @@ Para voltar à descoberta automática: `HYDRODIR` → `Limpar`.
 | `LIGAR`, `DESLIGAR` | Liga origens a um destino (bacia → sarjeta, bacia → bacia, sarjeta → trecho...) / desfaz |
 | `LIGACOES` | Tabela de objetos e ligações (destino, afluentes, árvore a montante) |
 | `CALCULAOBJETO` | Calcula um objeto como mecanismo entrada → saída: entrada = saídas dos montantes (bacias e sarjetas), saída = precipitação no maior tempo (ex.: sarjeta) |
+| `ATUALIZASUPERFICIE` | Define a superfície TIN do Civil 3D usada nas cotas (Enter sem selecionar = usar a cota da polilinha) |
+| `ETIQUETA`, `ETIQUETAEDITA` | Etiqueta dinamica de um objeto (relatorio fixo ou modelo com campos `{AREA}`, `{C}`, `{QP}`...) que se atualiza sozinha |
+| `TABELAVIVA`, `ATUALIZAETIQUETAS` | Tabela viva (objeto TABLE) com todos os objetos / atualiza etiquetas e tabelas agora |
+| `PADROES` | Define os padrões do projeto (TR, método, C, CN, n de Manning...) para não digitar sempre |
+| `CALCAUTO` | Modo automático: `BACIA` e `CALCULAOBJETO` usam o último TR, método e parâmetros sem perguntar |
 | `PRESERVAVAZAO` | Flag geral: manter a maior vazão entre a de entrada e a de saída |
 | `VALIDARLIGACOES` | Verifica e corrige a integridade das ligações |
 | `HYDROAUDIT` | Auditoria geral do desenho (como o `AUDIT`): vínculos quebrados, índices, seções e ligações; pergunta e corrige |
@@ -199,7 +205,8 @@ Depois compacte `dist/Hydro.bundle` e distribua com `build/instalar.bat`.
 6. **Conectar:** `OBJETO` no talvegue (tipo sarjeta: seção e rugosidade), `LIGAR`
    (a bacia sugere o próprio talvegue como destino; ao ligar em uma bacia ele
    pergunta se o montante contribui diretamente ao talvegue), `CALCULAOBJETO` (entrada,
-   saída e tempo máximo) e `LIGACOES` (tabela e árvore). Calcule **de montante para
+   saída e tempo máximo; **recalcula os montantes sozinho**). Ao criar um objeto o Hydro
+   oferece ligá-lo na hora. e `LIGACOES` (tabela e árvore). Calcule **de montante para
    jusante** (bacias, sarjetas), com o mesmo método e TR.
    O **receptor** guarda a lista `MONTANTE` no `PARAMS` dele (uma única fonte de verdade).
 7. Métodos novos (chuva-vazão, **tempo de concentração**), tipos de hidrograma e

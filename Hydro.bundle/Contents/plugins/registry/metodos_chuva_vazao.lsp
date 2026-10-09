@@ -1,5 +1,5 @@
 ;;; ============================================================
-;;; metodos.lsp - CATALOGO DE METODOS CHUVA-VAZAO (MET:)
+;;; metodos_chuva_vazao.lsp - CATALOGO DE METODOS CHUVA-VAZAO (MET:)
 ;;;
 ;;; Cada metodo e CADASTRADO no catalogo "metodo-chuva-vazao" do core. Quem
 ;;; calcula (plugin bacia) apenas lista o catalogo; nao conhece nenhum metodo.
@@ -205,5 +205,5 @@
   'MET:VazaoInformada
 )
 
-(HYDRO:Provide "metodos" "1.0")
+(HYDRO:Provide "metodos-chuva-vazao" "1.0")
 (princ)

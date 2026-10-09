@@ -27,7 +27,7 @@ import sys
 RAIZ = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 BUNDLE = os.path.join(RAIZ, 'Hydro.bundle', 'Contents')
 PREFIXOS = ('HYDRO', 'DB', 'XD', 'PREC', 'SARJ', 'VIEW', 'SJT', 'MET', 'TCM', 'BAC',
-            'BTB', 'HID', 'HIET', 'OBJ', 'LIG', 'OTP', 'SOB', 'OBT', 'PNL', 'MNU', 'TLB', 'EXM', 'EXO', 'HB', 'HT', 'OPD', 'OPV', 'AUD')
+            'BTB', 'HID', 'HIET', 'OBJ', 'LIG', 'OTP', 'SOB', 'OBT', 'PNL', 'MNU', 'TLB', 'EXM', 'EXO', 'HB', 'HT', 'OPD', 'OPV', 'AUD', 'PAD', 'SUP', 'ETQ')
 # (arquivo DCL, dialogo, arquivos .lsp que o usam)
 DIALOGOS = (
     ('idf.dcl', 'idf_dialog', ['views/idf_view.lsp']),
