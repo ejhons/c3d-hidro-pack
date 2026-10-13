@@ -38,8 +38,8 @@
 (defun BTB:_RotuloHid (hid)
   (if (HYDRO:Has "hidrograma")
     (HID:RotuloHid hid)
-    (strcat (BAC:_Val "TIPO" hid) "  |  TR " (HYDRO:FmtReal (BAC:_Val "TR" hid))
-            "  |  Qp " (rtos (BAC:_Val "QP" hid) 2 3))
+    (strcat (OBJ:_Val "TIPO" hid) "  |  TR " (HYDRO:FmtReal (OBJ:_Val "TR" hid))
+            "  |  Qp " (rtos (OBJ:_Val "QP" hid) 2 3))
   )
 )
 
@@ -51,7 +51,7 @@
       (list (strcat "Talvegue (handle): "
                     (if (BAC:Talvegue dados) (BAC:Talvegue dados) "-"))
             (strcat "Desnivel do talvegue: "
-                    (BTB:_Num (BAC:_Val "DESNIVEL" (BAC:Caract dados)) 2) " m")
+                    (BTB:_Num (OBJ:_Val "DESNIVEL" (BAC:Caract dados)) 2) " m")
             ""
             (strcat "VAZOES CALCULADAS (" (itoa (length (BAC:Vazao dados))) ")"))))
   (foreach c (BAC:Vazao dados)
@@ -73,19 +73,19 @@
     (setq out
       (append out
         (list
-          (BAC:_Limpa
+          (OBJ:_Limpa
             (list
               (cons "Nome" (BAC:_NomeExib dados h))
               (cons "Handle" h)
-              (cons "Metodo" (BAC:_NomeMetodo (BAC:_Val "METODO" c)))
-              (cons "TR (anos)" (BAC:_Val "TR" c))
-              (cons "Duracao (min)" (BAC:_Val "DUR" c))
-              (cons "tc (min)" (BAC:_Val "TC" c))
-              (cons "Qp (m3/s)" (BAC:_Val "QP" res))
-              (cons "i (mm/h)" (BAC:_Val "I" res))
-              (cons "P (mm)" (BAC:_Val "P" res))
-              (cons "Pe (mm)" (BAC:_Val "PE" res))
-              (cons "Volume (m3)" (BAC:_Val "VOLUME" res))
+              (cons "Metodo" (BAC:_NomeMetodo (OBJ:_Val "METODO" c)))
+              (cons "TR (anos)" (OBJ:_Val "TR" c))
+              (cons "Duracao (min)" (OBJ:_Val "DUR" c))
+              (cons "tc (min)" (OBJ:_Val "TC" c))
+              (cons "Qp (m3/s)" (OBJ:_Val "QP" res))
+              (cons "i (mm/h)" (OBJ:_Val "I" res))
+              (cons "P (mm)" (OBJ:_Val "P" res))
+              (cons "Pe (mm)" (OBJ:_Val "PE" res))
+              (cons "Volume (m3)" (OBJ:_Val "VOLUME" res))
             )
           )
         )
@@ -100,12 +100,12 @@
   (setq c (BAC:Caract dados))
   (setq atrib (BAC:Atrib dados))
   (setq nome (BAC:_NomeExib dados h))
-  (setq area (BAC:_Val "AREA" c))
+  (setq area (OBJ:_Val "AREA" c))
   (setq ha (if area (/ area 10000.0) nil))
-  (setq comp (BAC:_Val "COMP" c))
-  (setq decl (BAC:_Val "DECL" c))
-  (setq tc (BAC:_Val "MIN" (BAC:Tc dados)))
-  (setq origem (BAC:_NomeTc (BAC:_Val "ORIGEM" (BAC:Tc dados))))
+  (setq comp (OBJ:_Val "COMP" c))
+  (setq decl (OBJ:_Val "DECL" c))
+  (setq tc (OBJ:_Val "MIN" (BAC:Tc dados)))
+  (setq origem (BAC:_NomeTc (OBJ:_Val "ORIGEM" (BAC:Tc dados))))
   (setq nc (length (BAC:Vazao dados)))
   (setq nh (length (BAC:Hidrogramas dados)))
   (setq qpm (BAC:_MaxQp dados))
@@ -128,18 +128,18 @@
     )
     (cons "DETALHE" (BTB:_Detalhe dados h))
     (cons "CSV"
-      (BAC:_Limpa
+      (OBJ:_Limpa
         (list
           (cons "Nome" nome)
           (cons "Handle" h)
           (cons "Area (ha)" ha)
           (cons "L (m)" comp)
-          (cons "Desnivel (m)" (BAC:_Val "DESNIVEL" c))
+          (cons "Desnivel (m)" (OBJ:_Val "DESNIVEL" c))
           (cons "S (m/m)" decl)
           (cons "tc (min)" tc)
           (cons "Metodo tc" origem)
-          (cons "C" (BAC:_Val "C" atrib))
-          (cons "CN" (BAC:_Val "CN" atrib))
+          (cons "C" (OBJ:_Val "C" atrib))
+          (cons "CN" (OBJ:_Val "CN" atrib))
           (cons "Calculos" nc)
           (cons "Hidrogramas" nh)
           (cons "Qp max (m3/s)" (if (> qpm 0.0) qpm nil))
@@ -155,7 +155,7 @@
     rows
     (progn
       (foreach r rows
-        (if (vl-string-search (strcase filtro) (strcase (BAC:_Val "LINHA" r)))
+        (if (vl-string-search (strcase filtro) (strcase (OBJ:_Val "LINHA" r)))
           (setq out (cons r out))
         )
       )
@@ -166,11 +166,11 @@
 
 ;; Todas as bacias do desenho (reindexa se o indice estiver vazio)
 (defun BTB:Rows (filtro / lista rows en)
-  (setq lista (BAC:Listar))
+  (setq lista (OBJ:ListaTipo "bacia"))
   (if (not lista)
     (progn
-      (BAC:Reindexar)
-      (setq lista (BAC:Listar))
+      (OBJ:ReindexaTipo "bacia")
+      (setq lista (OBJ:ListaTipo "bacia"))
     )
   )
   (foreach en lista
@@ -242,8 +242,8 @@
         (setq linhas
           (append linhas
             (if (equal op "Calculos")
-              (BAC:_Val "CSV-CALC" r)
-              (list (BAC:_Val "CSV" r)))))
+              (OBJ:_Val "CSV-CALC" r)
+              (list (OBJ:_Val "CSV" r)))))
       )
       (if (not linhas)
         (alert "Nao ha dados para exportar (nenhum calculo cadastrado).")
@@ -271,7 +271,7 @@
 (defun BTB:_Mostra (rows sel / r)
   (setq r (if rows (nth sel rows) nil))
   (start_list "det")
-  (mapcar 'add_list (if r (BAC:_Val "DETALHE" r) (list "(nenhuma bacia selecionada)")))
+  (mapcar 'add_list (if r (OBJ:_Val "DETALHE" r) (list "(nenhuma bacia selecionada)")))
   (end_list)
 )
 
@@ -281,7 +281,7 @@
   (set_tile "t_cols"
     "Nome | Handle | Area (ha) | L (m) | S (m/m) | tc (min) | Metodo tc | Calc. | Hid. | Qp max (m3/s)")
   (start_list "lst")
-  (mapcar 'add_list (mapcar (function (lambda (r) (BAC:_Val "LINHA" r))) rows))
+  (mapcar 'add_list (mapcar (function (lambda (r) (OBJ:_Val "LINHA" r))) rows))
   (end_list)
   (if rows (set_tile "lst" (itoa sel)))
   (BTB:_Mostra rows sel)
@@ -301,7 +301,7 @@
       (strcat "\nRemover o cadastro da bacia " (BAC:_NomeExib dados (HYDRO:Handle en))
               " (calculos e hidrogramas serao perdidos)? [Sim/Nao] <Nao>: ")))
   (if (equal r "Sim")
-    (BAC:Remover en)
+    (OBJ:Remover en)
   )
 )
 
@@ -343,7 +343,7 @@
             (action_tile "cancel" "(done_dialog 0)")
             (setq cod (start_dialog))
             (setq r (if rows (nth sel rows) nil))
-            (setq en (if r (BAC:_Val "EN" r) nil))
+            (setq en (if r (OBJ:_Val "EN" r) nil))
             (cond
               ((= cod 12) nil)
               ((= cod 3)
@@ -357,12 +357,12 @@
               )
               ((= cod 4) (if en (HID:Visualizar en nil)))
               ((= cod 5) (if en (BAC:TextoInterativo en)))
-              ((= cod 6) (if en (BAC:EditarCadastro en)))
+              ((= cod 6) (if en (OBJ:CadastroInterativoTipo en "bacia")))
               ((= cod 7) (BTB:_ExportaCsv rows))
               ((= cod 8) (if en (BTB:_Remove en)))
               ((= cod 9)
                 (princ (strcat "\n[BACIA] Indice reconstruido: "
-                               (itoa (BAC:Reindexar)) " bacia(s)."))
+                               (itoa (OBJ:ReindexaTipo "bacia")) " bacia(s)."))
               )
               (T (setq ok nil))
             )

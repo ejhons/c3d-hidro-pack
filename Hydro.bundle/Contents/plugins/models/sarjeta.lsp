@@ -23,19 +23,23 @@
 ;;; REGISTRO (formato padrao, docs/arquitetura.md secao 18)
 ;;;   ATRIB   SECAO  id de uma secao cadastrada (CRIASECAO)
 ;;;           N      rugosidade de Manning (0 = usar a da secao)
-;;;   CARACT  COMP, DECL   obtidos do desenho (capacidade CARACTERIZA)
-;;;   RESULT  grupos com nome; os campos calculados ficam planos na entrada:
-;;;           VAZAO      (("METODO" ..) ("TR" ..) ("QP" . m3/s) ("AREA" . m2))
-;;;                      vazao afluente (soma dos picos das bacias a montante)
-;;;           HIDRAULICA (("METODO" ..) ("TR" ..) ("PARAMS" ..) ("Q" ..) ("TC-ENTRADA" . min)
-;;;                       ("PERCURSO" . min) ("SECAO-ID" ..)
-;;;                       ("N" ..) ("COMP" ..) ("DECL" ..) ("LAMINA" . m)
-;;;                       ("LARGURA" . m) ("AREA-MOLHADA" . m2) ("VELOCIDADE" . m/s)
-;;;                       ("AVISOS" . lista))
+;;;   CARACT  COMP, DECL   obtidos do desenho (capacidade CARACTERIZA) ou digitados
+;;;           (CARACT-DEFS; as chaves digitadas ficam em CARACT "MANUAL"). O CALCULO usa
+;;;           o CARACT; antes de calcular, LIG:CalcularCore o atualiza pelo desenho
+;;;           (OBJ:AtualizaCaract; flag HYDRO.CARACT.AUTO, comando CARACTAUTO, padrao 1).
+;;;   PARAMS  sem vinculos proprios (so JUSANTE, da ligacao)
+;;;   RESULT  por CENARIO (docs/plano_resultados_cenarios.md); grupos da sarjeta, campos planos:
+;;;           ENTRADA          ("VALOR" . m3/s) ("TC" . min) ("AREA" . m2)   o que chega dos montantes
+;;;           VAZAO            ("VALOR" . m3/s) ("TC" . min) ("METODO" ..) ("INPUT" ..)  a saida
+;;;           ALTURA_LAMINA    ("VALOR" . m) ("METODO" . "izzard")
+;;;           LARGURA_INUNDADA ("VALOR" . m)     AREA_MOLHADA ("VALOR" . m2)
+;;;           VELOCIDADE       ("VALOR" . m/s)   PERCURSO ("VALOR" . min)
+;;;           AVISOS           ("VALOR" . lista de textos)
+;;;           Secao, n, COMP e DECL NAO sao copiados: estao em ATRIB/CARACT.
 ;;;
 ;;; SECOES (catalogo HYDRO.SECOES; secao = (id ("h" . m) ("s" . %) ("w" . m) ("n" . manning)))
 ;;; CALCULO (comando CALCULAOBJETO)
-;;;   MONTANTE (PARAMS; ligacao.lsp) pode ter bacias E outras sarjetas. A sarjeta e um
+;;;   MONTANTE (derivado do JUSANTE das origens; ligacao.lsp) pode ter bacias E outras sarjetas. A sarjeta e um
 ;;;   mecanismo ENTRADA -> SAIDA e PRECISA de montante:
 ;;;     ENTRADA  Q = soma das saidas dos montantes; tc = maior tempo de saida. Sao os
 ;;;              parametros de entrada do dimensionamento/verificacao (Izzard abaixo).
@@ -43,8 +47,7 @@
 ;;;     SAIDA    tc = tc de entrada + tp (modo "percurso"); Q = bacias a montante
 ;;;              reavaliadas nesse tc maximo, e com a flag geral HYDRO.VAZAO.PRESERVA
 ;;;              max(Q entrada, Q calculada). Gravada em VAZAO; a entrada em ENTRADA.
-;;;   Por isso as sarjetas devem ser calculadas de montante para jusante, com o mesmo
-;;;   METODO e TR.
+;;;   Por isso as sarjetas devem ser calculadas de montante para jusante, no mesmo cenario.
 ;;;   Izzard: Q = 0.375 (z/n) y^(8/3) S^0.5, z = 100 / caimento(%)
 ;;;   avisa se a lamina passa do meio-fio ou a largura da secao.
 ;;; ============================================================
@@ -107,22 +110,22 @@
   (if (and z1 z2) (- z2 z1) nil)
 )
 
-;; (declividade . comprimento) da polilinha, ou nil
-(defun SOB:_Geometria (en / comp desn)
+;; Caracteristicas obtidas do desenho (gravadas em CARACT ao cadastrar): COMP e,
+;; se houver cota nas duas pontas (superficie ou polilinha 3D), DECL. O que nao der
+;; para ler simplesmente nao entra: o cadastro pergunta (CARACT-DEFS, secao 4).
+;; vinculos: alist (chave . ename) de PARAMS-DEFS; a sarjeta nao tem vinculos
+(defun SOB:Caracterizar (en vinculos / comp desn)
   (setq comp (SOB:_Comprimento en))
-  (setq desn (if comp (SOB:_Desnivel en (SOB:Superficie)) nil))
-  (if (and comp desn (> comp 0.0))
-    (cons (/ (abs desn) comp) comp)
-    nil
-  )
-)
-
-;; Caracteristicas obtidas do desenho (gravadas em CARACT ao cadastrar)
-(defun SOB:Caracterizar (en / geo)
-  (setq geo (SOB:_Geometria en))
-  (if geo
-    (list (cons "DECL" (car geo)) (cons "COMP" (cdr geo)))
-    nil
+  (setq desn
+    (if comp
+      (vl-catch-all-apply 'SOB:_Desnivel (list en (SOB:Superficie)))
+      nil))
+  (if (vl-catch-all-error-p desn) (setq desn nil))
+  (OBJ:_Limpa
+    (list
+      (cons "COMP" (if (and comp (> comp 0.0)) comp nil))
+      (cons "DECL" (if (and comp desn (> comp 0.0)) (/ (abs desn) comp) nil))
+    )
   )
 )
 
@@ -134,6 +137,7 @@
 ;;   ler      OBJ:Ler / OBJ:Registro      gravar   OBJ:GravaRegistro
 ;;   editar   OBJ:Cadastrar (comando OBJETO; ATRIB e CARACT)
 ;;   remover  OBJ:Remover (emite "objeto.removido" antes de apagar)
+;;   editar um campo: comando SARJETAEDITA (OPV:EditaCampo); marca RESULT obsoleto
 ;; Nada proprio a declarar: sem indice nem evento especiais. Se um dia precisar,
 ;; declare ("ARMAZENAMENTO" . ...) com as cinco operacoes na secao 8.
 
@@ -163,6 +167,14 @@
   (cdr (assoc id (SOB:Secoes)))
 )
 
+;; CARACT que o usuario digita quando o desenho nao informa (formato de ATRIB)
+(defun SOB:_CaractDefs ()
+  (list
+    (list "COMP" "Comprimento" 0.0 "m")
+    (list "DECL" "Declividade" 0.0 "m/m")
+  )
+)
+
 ;; padroes de ATRIB na hora de cadastrar: a secao atual do plugin sarjetas
 (defun SOB:_Padroes (en)
   (list (cons "SECAO" (SOB:SecaoAtualId)))
@@ -178,10 +190,10 @@
 ;;; ------------------------------------------------------------
 ;;; 5. RESULTADOS (RESULT)
 ;;; ------------------------------------------------------------
-;; entradas do grupo VAZAO (afluente) e HIDRAULICA (lamina, velocidade...)
-(defun SOB:Vazao (en)       (OBJ:GrupoDe en "VAZAO"))
+;; grupos de um cenario: VAZAO (saida) e ALTURA_LAMINA; os demais: OBJ:ResultGrupoDe
+(defun SOB:Vazao (en cenario)       (OBJ:ResultGrupoDe en cenario "VAZAO"))
 
-(defun SOB:Hidraulica (en)  (OBJ:GrupoDe en "HIDRAULICA"))
+(defun SOB:Lamina (en cenario)      (OBJ:ResultGrupoDe en cenario "ALTURA_LAMINA"))
 
 ;;; ------------------------------------------------------------
 ;;; 6. CALCULOS
@@ -192,30 +204,35 @@
   (expt (/ (* q n) (* 0.375 z (expt s 0.5))) (/ 3.0 8.0))
 )
 
-;; Devolve os campos de HIDRAULICA (planos) ou (("ERRO" . msg)).
-;; Quem grava e o CALCULAOBJETO (OBJ:GravarResultado en "HIDRAULICA" ...).
+;; Devolve os GRUPOS calculados ((grupo . campos) ...) ou (("ERRO" . msg)).
+;; Quem grava e LIG:CalcularCore (OBJ:GravarCalculo, uma gravacao so, junto com
+;; ENTRADA e VAZAO). ctx = (("CENARIO" ..) ("TR" ..) ("METODO" ..) ("ENTRADA" ("QP" ..) ("TC" ..)))
 (defun SOB:Calcular (en ctx params /
-                     dados id sec q geo decl comp n h cai w z y larg am vel avisos tcin)
+                     dados id sec q cr decl comp n h cai w z y larg am vel avisos)
   (setq dados (OBJ:AtribDe en))
   (setq id (cdr (assoc "SECAO" dados)))
   (setq sec (if id (SOB:_Secao id) nil))
-  (setq q (cdr (assoc "QP" (cdr (assoc "VAZAO" ctx)))))
-  (setq tcin (cdr (assoc "TC" (cdr (assoc "VAZAO" ctx)))))
-  (setq geo (SOB:_Geometria en))
-  (setq decl (if geo (car geo) nil))
-  (setq comp (if geo (cdr geo) nil))
+  (setq q (cdr (assoc "QP" (cdr (assoc "ENTRADA" ctx)))))
+  ;; geometria = o que esta em CARACT (do desenho ou digitado)
+  (setq cr (OBJ:CaractDe en))
+  (setq decl (cdr (assoc "DECL" cr)))
+  (setq comp (cdr (assoc "COMP" cr)))
   (cond
     ((not sec)
       (SOB:_Erro
         (strcat "Secao " (if id (itoa id) "?")
-                " nao cadastrada. Edite o objeto (OBJETO) ou crie a secao (CRIASECAO)."))
+                " nao cadastrada. Edite o objeto (SARJETAEDITA) ou crie a secao (CRIASECAO)."))
     )
     ((or (not q) (<= q 0.0))
       (SOB:_Erro "Nao ha vazao afluente: ligue bacias ou sarjetas calculadas a esta sarjeta (LIGAR).")
     )
     ((or (not decl) (<= decl 0.0))
       (SOB:_Erro
-        "Declividade nula. Defina a superficie (ATUALIZASUPERFICIE) ou use polilinha 3D.")
+        (strcat "Declividade ausente ou nula. Defina a superficie (ATUALIZASUPERFICIE) ou "
+                "digite-a (SARJETAEDITA)."))
+    )
+    ((or (not comp) (<= comp 0.0))
+      (SOB:_Erro "Comprimento ausente. Digite-o (SARJETAEDITA).")
     )
     (T
       (setq n   (SOB:_N dados sec))
@@ -233,19 +250,14 @@
       (if (and w (> larg w))
         (setq avisos (append avisos (list "largura inundada maior que a largura da secao")))
       )
+      ;; GRUPOS do cenario (campos planos; "VALOR" = o numero principal)
       (list
-        (cons "Q" q)
-        (cons "TC-ENTRADA" tcin)
-        (cons "PERCURSO" (/ comp vel 60.0))
-        (cons "SECAO-ID" id)
-        (cons "N" n)
-        (cons "COMP" comp)
-        (cons "DECL" decl)
-        (cons "LAMINA" y)
-        (cons "LARGURA" larg)
-        (cons "AREA-MOLHADA" am)
-        (cons "VELOCIDADE" vel)
-        (cons "AVISOS" avisos)
+        (cons "ALTURA_LAMINA" (list (cons "VALOR" y) (cons "METODO" "izzard")))
+        (cons "LARGURA_INUNDADA" (list (cons "VALOR" larg)))
+        (cons "AREA_MOLHADA" (list (cons "VALOR" am)))
+        (cons "VELOCIDADE" (list (cons "VALOR" vel)))
+        (cons "PERCURSO" (list (cons "VALOR" (/ comp vel 60.0))))
+        (cons "AVISOS" (list (cons "VALOR" avisos)))
       )
     )
   )
@@ -255,34 +267,41 @@
 ;;; ------------------------------------------------------------
 ;;; 7. RESUMO E FORMATACAO (linhas de texto; quem desenha e a view)
 ;;; ------------------------------------------------------------
-(defun SOB:Formata (res / linhas av)
+;; "VALOR" de um grupo do cenario (ou nil); AVISOS devolve a lista de textos
+(defun SOB:_V (en cenario grupo)
+  (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe en cenario grupo))
+)
+
+(defun SOB:Formata (en cenario / g dados id n linhas av)
+  (setq dados (OBJ:AtribDe en))
+  (setq id (cdr (assoc "SECAO" dados)))
+  (setq n (SOB:_N dados (if id (SOB:_Secao id) nil)))
   (setq linhas
     (list
-      (strcat "Q = " (rtos (cdr (assoc "Q" res)) 2 3) " m3/s   "
-              "Secao " (itoa (cdr (assoc "SECAO-ID" res)))
-              "   n = " (rtos (cdr (assoc "N" res)) 2 4))
-      (strcat "L = " (rtos (cdr (assoc "COMP" res)) 2 1) " m   "
-              "S = " (rtos (cdr (assoc "DECL" res)) 2 4) " m/m")
-      (strcat "Lamina: " (rtos (cdr (assoc "LAMINA" res)) 2 3) " m   "
-              "Largura: " (rtos (cdr (assoc "LARGURA" res)) 2 2) " m")
-      (strcat "Velocidade: " (rtos (cdr (assoc "VELOCIDADE" res)) 2 2) " m/s")
-      (strcat "Percurso: " (rtos (cdr (assoc "PERCURSO" res)) 2 2) " min"
-              (if (cdr (assoc "TC-ENTRADA" res))
-                (strcat "   tc de chegada: " (rtos (cdr (assoc "TC-ENTRADA" res)) 2 1) " min")
+      (strcat "Q = " (rtos (SOB:_V en cenario "VAZAO") 2 3) " m3/s   "
+              "Secao " (if id (itoa id) "?")
+              (if n (strcat "   n = " (rtos n 2 4)) ""))
+      (strcat "Lamina: " (rtos (SOB:_V en cenario "ALTURA_LAMINA") 2 3) " m   "
+              "Largura: " (rtos (SOB:_V en cenario "LARGURA_INUNDADA") 2 2) " m")
+      (strcat "Velocidade: " (rtos (SOB:_V en cenario "VELOCIDADE") 2 2) " m/s")
+      (strcat "Percurso: " (rtos (SOB:_V en cenario "PERCURSO") 2 2) " min"
+              (if (OBJ:_Val "TC" (OBJ:ResultGrupoDe en cenario "ENTRADA"))
+                (strcat "   tc de chegada: "
+                        (rtos (OBJ:_Val "TC" (OBJ:ResultGrupoDe en cenario "ENTRADA")) 2 1) " min")
                 ""))
     )
   )
-  (foreach av (cdr (assoc "AVISOS" res))
+  (foreach av (SOB:_V en cenario "AVISOS")
     (setq linhas (append linhas (list (strcat "ATENCAO: " av))))
   )
   linhas
 )
 
-(defun SOB:Resumo (en / dados id sec linhas geo r)
+(defun SOB:Resumo (en / dados id sec linhas cr c)
   (setq dados (OBJ:AtribDe en))
   (setq id (cdr (assoc "SECAO" dados)))
   (setq sec (if id (SOB:_Secao id) nil))
-  (setq geo (SOB:_Geometria en))
+  (setq cr (OBJ:CaractDe en))
   (setq linhas
     (list
       (strcat "Sarjeta: " (OBJ:Nome en))
@@ -294,21 +313,25 @@
                 (rtos (SOB:_N dados sec) 2 4))
         (strcat "Secao " (if id (itoa id) "?") " (nao cadastrada)")
       )
-      (if geo
-        (strcat "L = " (rtos (cdr geo) 2 1) " m   S = " (rtos (car geo) 2 4) " m/m")
-        "Geometria indisponivel (declividade nula ou fora da superficie)"
+      (if (and (assoc "COMP" cr) (assoc "DECL" cr))
+        (strcat "L = " (rtos (cdr (assoc "COMP" cr)) 2 1) " m   S = "
+                (rtos (cdr (assoc "DECL" cr)) 2 4) " m/m"
+                (if (member "DECL" (cdr (assoc "MANUAL" cr))) "  (manual)" ""))
+        "Geometria indisponivel (use SARJETAEDITA para digitar comprimento/declividade)"
       )
       (strcat "Afluentes: " (itoa (length (LIG:Afluentes en))))
     )
   )
   (setq linhas (append linhas (OBJ:LinhasAtrib en)))
-  (foreach r (SOB:Hidraulica en)
-    (setq linhas
-      (append linhas
-        (list
-          (strcat "Calculo TR " (HYDRO:FmtReal (cdr (assoc "TR" r)))
-                  ":  y = " (rtos (cdr (assoc "LAMINA" r)) 2 3)
-                  " m   T = " (rtos (cdr (assoc "LARGURA" r)) 2 2) " m")))
+  (foreach c (OBJ:CenariosDe en)
+    (if (SOB:_V en c "ALTURA_LAMINA")
+      (setq linhas
+        (append linhas
+          (list
+            (strcat "Cenario " c (if (OBJ:Obsoleto en c) " (DESATUALIZADO)" "")
+                    ":  y = " (rtos (SOB:_V en c "ALTURA_LAMINA") 2 3)
+                    " m   T = " (rtos (SOB:_V en c "LARGURA_INUNDADA") 2 2) " m")))
+      )
     )
   )
   linhas
@@ -350,6 +373,7 @@
     (list
       (cons "PADROES" 'SOB:_Padroes)
       (cons "CARACTERIZA" 'SOB:Caracterizar)
+      (cons "CARACT-DEFS" (SOB:_CaractDefs))
       (cons "RESUMO" 'SOB:Resumo)
       (cons "TOSTRING" 'SOB:ToString)
       (cons "CALCULA" 'SOB:Calcular)
@@ -374,6 +398,7 @@
 )
 
 (defun c:SARJETACAD ()  (SOB:_Padrao 'OPV:Cadastrar))
+(defun c:SARJETAEDITA () (SOB:_Padrao 'OPV:EditaCampo))
 (defun c:SARJETAS ()    (SOB:_Padrao 'OPV:Listar))
 (defun c:SARJETAINFO () (SOB:_Padrao 'OPV:Info))
 (defun c:SARJETAZOOM () (SOB:_Padrao 'OPV:Zoom))

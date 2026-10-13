@@ -18,6 +18,12 @@
 ;;;      para o objeto funcionar com um unico .lsp. Texto no desenho e dialogos DCL
 ;;;      vao em views/<nome>_view.lsp. Todo objeto tem um toString (secao 7).
 ;;;
+;;; ESQUELETO UNICO (docs/objeto_generico.lsp explica cada ponto; plano em docs/plano_esqueleto_unico.md):
+;;;   - CADASTRAR NUNCA CALCULA: so ATRIB, PARAMS (vinculos) e CARACT; o resultado nasce no calculo
+;;;   - nao escreva cadastro interativo: declare PARAMS-DEFS, CARACT-DEFS, CARACTERIZA, PADROES
+;;;   - os 5 comandos padrao (CAD, EDITA, S, INFO, ZOOM) sao uma linha cada, via OPV:* (secao 9)
+;;;   - editar marca o RESULT como OBSOLETO; so o calculo remove (OBJ:GravarResultado)
+;;;
 ;;; ATENCAO: o calculo abaixo (capacidade a secao plena de um tubo circular
 ;;; pela formula de Manning) e so um EXEMPLO do contrato. Confira formula,
 ;;; unidades e limites antes de usar em projeto.
@@ -44,8 +50,9 @@
 ;;; 2. GEOMETRIA (CARACTERIZACAO)
 ;;; O que se le do desenho; vira CARACT ao cadastrar.
 ;;; ------------------------------------------------------------
-;; (fn en) -> alist gravada em CARACT (comprimento, area... o que o desenho informa)
-(defun EXO:Caracterizar (en / comp)
+;; (fn en vinculos) -> alist gravada em CARACT (comprimento, area... o que o desenho informa)
+;; vinculos = alist (chave-de-PARAMS . ename); veja docs/objeto_generico.lsp
+(defun EXO:Caracterizar (en vinculos / comp)
   (setq comp
     (vl-catch-all-apply
       (function (lambda () (vlax-curve-getDistAtParam en (vlax-curve-getEndParam en))))
@@ -57,9 +64,9 @@
 ;;; ------------------------------------------------------------
 ;;; 3. LER, GRAVAR, EDITAR, REMOVER
 ;;; Tipo simples HERDA a porta da classe base (OBJ:Ler, OBJ:GravaRegistro,
-;;; OBJ:Cadastrar, OBJ:Remover). So escreva funcoes aqui se precisar de
-;;; indice ou remocao proprios; neste caso declare as CINCO operacoes em
-;;; ("ARMAZENAMENTO" . ...) na secao 8 (LER devolve o registro padrao).
+;;; OBJ:CadastrarCom, OBJ:Remover). Nao declare ARMAZENAMENTO: para limpeza
+;;; propria use o gancho ("AO-REMOVER" . fn); se o tipo monta o proprio
+;;; registro, grave com OBJ:Salvar; leia com OBJ:RegistroDe (como a bacia).
 ;;; ------------------------------------------------------------
 
 
@@ -72,6 +79,17 @@
 ;; (fn en) -> alist de padroes de ATRIB na hora de cadastrar
 (defun EXO:_Padroes (en)
   (list (cons "DIAM" 0.8))
+)
+
+;; VINCULOS (PARAMS-DEFS): entidades de apoio pedidas no cadastro, gravadas em PARAMS como
+;; handles. (chave rotulo aceita [obrigatorio]); aceita = nomes DXF e/ou ids de tipo; Enter pula.
+(defun EXO:_VinculosDefs ()
+  (list (list "APOIO" "a linha de apoio (Enter = pular)" '("LINE" "LWPOLYLINE")))
+)
+
+;; CARACT digitavel (CARACT-DEFS): perguntado so quando o desenho nao informa. Formato de ATRIB.
+(defun EXO:_CaractDefs ()
+  (list (list "COMP" "Comprimento" 0.0 "m"))
 )
 
 ;; (fn tipo-origem tipo-destino) -> nil/T (permitido) ou STRING (motivo)
@@ -92,7 +110,7 @@
 ;;;   (OBJ:GravarResultado en "HIDRAULICA" entrada)  o que o tipo calcula
 ;;; entrada = campos planos + METODO e TR (identidade da entrada).
 ;;; ------------------------------------------------------------
-(defun EXO:Hidraulica (en)  (OBJ:GrupoDe en "HIDRAULICA"))
+(defun EXO:Hidraulica (en)  (OBJ:ResultGrupoDe en "HIDRAULICA"))
 
 
 ;;; ------------------------------------------------------------
@@ -178,6 +196,8 @@
   T                                              ; descarrega em outros
   (list
     (cons "CARACTERIZA" 'EXO:Caracterizar)
+    (cons "PARAMS-DEFS" (EXO:_VinculosDefs))
+    (cons "CARACT-DEFS" (EXO:_CaractDefs))
     (cons "PADROES" 'EXO:_Padroes)
     (cons "REGRA" 'EXO:_Regra)
     (cons "RESUMO" 'EXO:_Resumo)
@@ -196,8 +216,10 @@
     ;;   ("EDITAR" . fn)            edicao propria
     ;;   ("DETECTA" . fn)           reconhece entidades sem cadastro de objeto
     ;;
-    ;; ARMAZENAMENTO PROPRIO (so se o tipo precisar de gravacao, indice ou
-    ;; remocao proprios; o registro continua sendo o padrao):
+    ;;   ("AO-REMOVER" . fn)        limpeza propria ao remover o cadastro
+    ;;
+    ;; ARMAZENAMENTO PROPRIO (so se o tipo guardar FORA da extensao da entidade;
+    ;; verificar.py recusa em models/; o registro continua sendo o padrao):
     ;;   ("ARMAZENAMENTO" . (("LER" . fn) ("GRAVAR" . fn) ("LISTAR" . fn)
     ;;                       ("REINDEXAR" . fn) ("REMOVER" . fn)))
     ;; Sem as 5 operacoes o tipo NAO e registrado.
@@ -207,9 +229,17 @@
 ;;; ------------------------------------------------------------
 ;;; 9. COMANDOS E INTERACAO (linha de comando)
 ;;; Comandos c: proprios do objeto e as perguntas deles (getXXX, alert).
-;;; Exemplo: (defun c:BUEIROINFO (/ sel) ... (alert (EXO:ToString (car sel))))
-;;; Sem comando proprio, deixe so este comentario: os comandos genericos
-;;; (OBJETO, OBJETOINFO, LIGAR, CALCULAOBJETO) ja atendem o tipo.
+;;; Os 5 comandos padrao do objeto (verificar.py exige; cada um com botao no painel):
+;;;   (defun EXO:_Padrao (fn)
+;;;     (if (HYDRO:Has "objetos-padrao-view") (apply fn (list "bueiro")) (alert "Carregue objetos_padrao."))
+;;;     (princ))
+;;;   (defun c:EXEMPLOCAD ()   (EXO:_Padrao 'OPV:Cadastrar))    cadastra/edita (todos os campos)
+;;;   (defun c:EXEMPLOEDITA () (EXO:_Padrao 'OPV:EditaCampo))   altera UM campo
+;;;   (defun c:EXEMPLOS ()     (EXO:_Padrao 'OPV:Listar))
+;;;   (defun c:EXEMPLOINFO ()  (EXO:_Padrao 'OPV:Info))
+;;;   (defun c:EXEMPLOZOOM ()  (EXO:_Padrao 'OPV:Zoom))
+;;; (troque EXEMPLO pelo nome do arquivo em maiusculas). O calculo e as ligacoes usam os comandos
+;;; genericos (CALCULAOBJETO, LIGAR...). Perguntas proprias so se o calculo precisar de dados extras.
 ;;; ------------------------------------------------------------
 
 (HYDRO:Provide "exemplo-objeto" "1.0")

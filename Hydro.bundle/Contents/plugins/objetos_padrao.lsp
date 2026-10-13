@@ -14,7 +14,7 @@
 ;;;   OPD:Casa texto nome h    teste puro usado por OPD:Procurar
 ;;;   OPD:Linha en             "nome  [Tipo]  handle"
 ;;;   OPD:Referencias en       vinculos de PARAMS: lista de (chave . handle); os
-;;;                            handles de MONTANTE vem como ("MONTANTE" . handle)
+;;;                            o handle de JUSANTE vem como ("JUSANTE" . handle)
 ;;;   OPD:Alvo handle          ename do alvo de um vinculo, ou nil se nao existe
 ;;;   OPD:Vinculos filtro      todos os vinculos: (origem chave handle alvo-ou-nil)
 ;;;   OPD:Referenciando en     objetos que apontam para `en` em algum PARAMS
@@ -22,7 +22,7 @@
 ;;; AUDITORIA (catalogo "auditoria"; ver plugins/auditoria.lsp). Cadastra aqui:
 ;;;   "indice"        handles de HYDRO.OBJETOS que nao existem mais e objetos do
 ;;;                   desenho fora do indice (corrige: OBJ:Reindexar)
-;;;   "params"        vinculos de PARAMS (exceto MONTANTE, que e da verificacao
+;;;   "params"        vinculos de PARAMS (exceto JUSANTE, que e da verificacao
 ;;;                   "ligacoes") que apontam para entidade apagada ou inexistente (corrige: escolher outra entidade ou remover o vinculo)
 ;;;   "tipo-ausente"  cadastro de um tipo que nao esta carregado (so informa; nao
 ;;;                   apaga nada, pois os dados voltam a valer ao carregar o tipo)
@@ -69,15 +69,14 @@
 ;;; ------------------------------------------------------------
 ;; PARAMS guarda ligacoes com OUTROS objetos/entidades: (chave . handle). Todo
 ;; valor string de PARAMS e tratado como handle.
-(defun OPD:Referencias (en / out p m)
+(defun OPD:Referencias (en / out p)
   (foreach p (OBJ:ParamsDe en)
     (cond
       ((= (type (cdr p)) 'STR)
         (setq out (append out (list p))))
-      ;; MONTANTE e um dicionario (handle . flag): cada handle e um vinculo
-      ((and (equal (car p) "MONTANTE") (listp (cdr p)))
-        (foreach m (cdr p)
-          (setq out (append out (list (cons "MONTANTE" (car m)))))))
+      ;; JUSANTE e um par (handle . flag): o handle e um vinculo
+      ((and (equal (car p) "JUSANTE") (listp (cdr p)))
+        (setq out (append out (list (cons "JUSANTE" (car (cdr p)))))))
     )
   )
   out
@@ -171,8 +170,8 @@
 ;; problemas: ("PARAMS-QUEBRADO" origem chave handle)
 (defun OPD:_AudParams (/ out v)
   (foreach v (OPD:Vinculos nil)
-    ;; MONTANTE e auditado pela verificacao "ligacoes" (plugin ligacao)
-    (if (and (not (nth 3 v)) (not (equal (nth 1 v) "MONTANTE")))
+    ;; JUSANTE e auditado pela verificacao "ligacoes" (plugin ligacao)
+    (if (and (not (nth 3 v)) (not (equal (nth 1 v) "JUSANTE")))
       (setq out
         (append out
           (list (list "PARAMS-QUEBRADO" (nth 0 v) (nth 1 v) (nth 2 v)))))

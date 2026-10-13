@@ -4,6 +4,7 @@
 ;;; Os fluxos que os modelos usam nos comandos padrao, cada um recebendo o id do
 ;;; tipo (docs/arquitetura.md secao 18b):
 ;;;   (OPV:Cadastrar tipo)   <TIPO>CAD   escolhe a entidade e cadastra / edita
+;;;   (OPV:EditaCampo tipo)  <TIPO>EDITA escolhe o objeto e UM campo a alterar
 ;;;   (OPV:Listar tipo)      <TIPO>S     lista os cadastrados (tipo nil = todos)
 ;;;   (OPV:Info tipo)        <TIPO>INFO  mostra as informacoes de um objeto
 ;;;   (OPV:Zoom tipo)        <TIPO>ZOOM  procura por nome/handle, da zoom e seleciona
@@ -53,6 +54,26 @@
             (OBJ:Editar en)
             (OBJ:CadastroInterativoTipo en tipo))
         (alert (OBJ:ToString en))
+      )
+    )
+  )
+  (princ)
+)
+
+;; <TIPO>EDITA: escolhe o objeto, depois o CAMPO a alterar; pergunta so ele
+(defun OPV:EditaCampo (tipo / sel en)
+  (setq sel (entsel (strcat "\nSelecione o objeto (" (OBJ:_NomeTipo tipo) ") a editar: ")))
+  (if sel
+    (progn
+      (setq en (car sel))
+      (cond
+        ((not (equal (OBJ:TipoDe en) tipo))
+          (alert (strcat "Esta entidade nao e do tipo " (OBJ:_NomeTipo tipo) ".")))
+        ((OBJ:EditaCampoInterativo en)
+          (princ "\nCampo alterado.")
+          (if (OBJ:Obsoleto en nil)
+            (princ "\nResultado desatualizado: recalcule com CALCULAOBJETO."))
+        )
       )
     )
   )

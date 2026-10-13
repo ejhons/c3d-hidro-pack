@@ -1,10 +1,10 @@
 ;;; ============================================================
 ;;; hidrograma.lsp - HIDROGRAMAS DA BACIA (HID:)
 ;;;
-;;; Gera hidrogramas a partir de um calculo de vazao ja cadastrado na bacia
-;;; (comando BACIA), GUARDA o hidrograma NA PROPRIA BACIA (dados do contorno,
-;;; ver models/bacia.lsp), mostra um grafico com varios hidrogramas sobrepostos e
-;;; uma tabela, e exporta a tabela em CSV.
+;;; Gera o hidrograma de um CENARIO ja calculado da bacia (comando BACIA), usando o TIPO
+;;; definido na bacia (ATRIB HIDROGRAMA-TIPO), GUARDA-o no grupo HIDROGRAMA desse cenario (RESULT,
+;;; ver models/bacia.lsp), mostra um grafico com varios hidrogramas sobrepostos e uma tabela, e
+;;; exporta a tabela em CSV. Um hidrograma por cenario; recalcular a vazao do cenario o remove.
 ;;;
 ;;; TIPOS DE HIDROGRAMA (catalogo "hidrograma-tipo" do core; cadastravel;
 ;;; os tipos incluidos ficam em registry/hidrograma_tipos.lsp)
@@ -32,7 +32,7 @@
 ;;;   O plugin calcula QP, TP, TB e VOLUME a partir dos pontos.
 ;;;
 ;;; EVENTO EMITIDO
-;;;   "hidrograma.gerado"  dados = "BACIA" (ename) "TIPO" "METODO" "TR" "DUR"
+;;;   "hidrograma.gerado"  dados = "BACIA" (ename) "CENARIO" "TIPO" "METODO" "TR" "DUR"
 ;;;                        "QP" "TP" "TB" "VOLUME" "PONTOS"
 ;;;
 ;;; COMANDOS E VISUALIZADOR (views/hidrograma_view.lsp)
@@ -221,6 +221,7 @@
               (setq pico (HID:_Pico pts))
               (HID:_Limpa
                 (list
+                  (cons "CENARIO" (cdr (assoc "CENARIO" ctx)))
                   (cons "TIPO" tipo-id)
                   (cons "METODO" (cdr (assoc "METODO" ctx)))
                   (cons "TR" (cdr (assoc "TR" ctx)))
@@ -242,28 +243,38 @@
   )
 )
 
-(defun HID:_MesmoHid (a b)
-  (if (and (equal (cdr (assoc "TIPO" a)) (cdr (assoc "TIPO" b)))
-           (equal (cdr (assoc "METODO" a)) (cdr (assoc "METODO" b)))
-           (equal (cdr (assoc "TR" a)) (cdr (assoc "TR" b)) 1e-9))
-    T
-    nil
+;; (puro) Campos do grupo HIDROGRAMA do cenario, a partir do hidrograma plano de HID:Gerar.
+;; VALOR = Qp; METODO e TR nao sao copiados (estao em VAZAO e CENARIO); PARAMS vira INPUT.
+(defun HID:_Grupo (hid)
+  (HID:_Limpa
+    (list
+      (cons "VALOR" (cdr (assoc "QP" hid)))
+      (cons "TIPO" (cdr (assoc "TIPO" hid)))
+      (cons "DUR" (cdr (assoc "DUR" hid)))
+      (cons "TP" (cdr (assoc "TP" hid)))
+      (cons "TB" (cdr (assoc "TB" hid)))
+      (cons "VOLUME" (cdr (assoc "VOLUME" hid)))
+      (cons "NOTA" (cdr (assoc "NOTA" hid)))
+      (cons "INPUT" (cdr (assoc "PARAMS" hid)))
+      (cons "PONTOS" (cdr (assoc "PONTOS" hid)))
+    )
   )
 )
 
-;; Guarda o hidrograma na bacia (substitui o de mesmo TIPO, METODO e TR)
-(defun HID:Armazenar (en dados hid / lista)
-  (setq lista
-    (append
-      (vl-remove-if
-        (function (lambda (x) (HID:_MesmoHid x hid)))
-        (BAC:Hidrogramas dados)
-      )
-      (list hid)
-    )
+;; Tipo de hidrograma definido na bacia (ATRIB HIDROGRAMA-TIPO); se ausente ou nao cadastrado,
+;; "triangular-scs" (ou o primeiro cadastrado)
+(defun HID:TipoDaBacia (en / id)
+  (setq id (OBJ:_Val "HIDROGRAMA-TIPO" (OBJ:AtribDe en)))
+  (cond
+    ((and id (HYDRO:RegGet "hidrograma-tipo" id)) id)
+    ((HYDRO:RegGet "hidrograma-tipo" "triangular-scs") "triangular-scs")
+    (T (car (car (HYDRO:RegList "hidrograma-tipo"))))
   )
-  (BAC:Gravar en (BAC:_SetResult dados "HIDROGRAMAS" lista))
-  lista
+)
+
+;; Guarda o hidrograma no grupo HIDROGRAMA do CENARIO (substitui o que havia)
+(defun HID:Armazenar (en cenario hid)
+  (OBJ:GravarResultado en cenario "HIDROGRAMA" (HID:_Grupo hid))
 )
 
 ;;; ------------------------------------------------------------
@@ -275,7 +286,8 @@
 )
 
 (defun HID:RotuloHid (h)
-  (strcat "TR " (HYDRO:FmtReal (cdr (assoc "TR" h)))
+  (strcat (if (cdr (assoc "CENARIO" h)) (cdr (assoc "CENARIO" h))
+            (strcat "TR " (HYDRO:FmtReal (cdr (assoc "TR" h)))))
           "  |  " (HID:_NomeTipo (cdr (assoc "TIPO" h)))
           "  |  Qp " (rtos (cdr (assoc "QP" h)) 2 3))
 )

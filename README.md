@@ -122,13 +122,15 @@ Para voltar à descoberta automática: `HYDRODIR` → `Limpar`.
 | `CRIASECAO`, `SELECIONASECAO`, `PARAMETROSSARJETA` | Seções de sarjeta |
 | `SECAO` | Diálogo visual das seções: exagero vertical escolhido, escala comum, lâmina d'água e inserção no desenho |
 | `IDF` | Calcula a intensidade para **tr, tc e duração** informados (duração = tc ou outra) |
-| `BACIACAD` | **Cadastro rápido** da bacia: nome, tc (vários métodos), C e CN |
+| `BACIACAD`, `BACIAEDITA` | Cadastra a bacia (nome, C, CN, **método do tc** ou tc informado, talvegue opcional; **não calcula**) / altera **um** campo |
 | `BACIA` | Calcula a vazão por um método cadastrado e guarda na entidade |
 | `CRIARBACIARESULTADO`, `TEXTOBACIA` | Insere o resultado da bacia como texto no desenho |
 | `BACIATABELA` | Tabela das bacias do desenho (detalhes, ir para, hidrogramas, texto, editar, CSV) |
-| `BACIAS`, `BACIAINFO` | Lista em texto / dados de uma bacia |
+| `BACIAS`, `BACIAINFO`, `BACIAZOOM` | Lista em texto / dados / localiza uma bacia |
+| `CARACTAUTO`, `PROPAGAOBSOLETO` | Flags: reler o desenho antes de calcular / marcar o jusante como desatualizado ao editar |
 | `OBJETO` | Transforma uma entidade (polilinha, bloco, estrutura/tubo do Civil 3D...) em objeto hidráulico de um tipo |
 | `LIGAR`, `DESLIGAR` | Liga origens a um destino (bacia → sarjeta, bacia → bacia, sarjeta → trecho...) / desfaz |
+| `LIGACOESVER` | Mostra na tela, de forma temporária (some com REDRAW/REGEN), as ligações como linhas tracejadas com seta (saem do fim e entram no início da curva; bacia sem talvegue: centro a centro) |
 | `LIGACOES` | Tabela de objetos e ligações (destino, afluentes, árvore a montante) |
 | `CALCULAOBJETO` | Calcula um objeto como mecanismo entrada → saída: entrada = saídas dos montantes (bacias e sarjetas), saída = precipitação no maior tempo (ex.: sarjeta) |
 | `ATUALIZASUPERFICIE` | Define a superfície TIN do Civil 3D usada nas cotas (Enter sem selecionar = usar a cota da polilinha) |
@@ -142,7 +144,13 @@ Para voltar à descoberta automática: `HYDRODIR` → `Limpar`.
 | `OBJETOS`, `OBJETOZOOM` | Lista objetos de um tipo (ou todos) / localiza qualquer objeto por nome ou handle (zoom e seleção) |
 | `OBJETOVINCULOS` | Realça as entidades vinculadas em `PARAMS` (ex.: o talvegue de cada bacia) |
 | `BACIAZOOM` | Localiza uma bacia por nome ou handle |
-| `SARJETACAD`, `SARJETAS`, `SARJETAINFO`, `SARJETAZOOM` | Cadastrar/editar, listar, dados e localizar sarjetas |
+| `ESCADACAD`, `ESCADAEDITA`, `ESCADAS`, `ESCADAINFO`, `ESCADAZOOM` | Escada hidráulica (linha/polilinha 3D; seção retangular do catálogo de tubo): degraus, altura crítica; regime por método |
+| `ESTRUTURACAD`, `ESTRUTURAEDITA`, `ESTRUTURAS`, `ESTRUTURAINFO`, `ESTRUTURAZOOM` | Estrutura (poço de visita, caixa, ala, boca de lobo): repassa a vazão, perda de carga localizada e captação por capacidade unitária |
+| `CRIATIPOESTRUTURA`, `EDITATIPOESTRUTURA`, `REMOVETIPOESTRUTURA`, `TIPOESTRUTURA` | Catálogo de tipos de estrutura |
+| `TUBOCAD`, `TUBOEDITA`, `TUBOS`, `TUBOINFO`, `TUBOZOOM` | Tubo ou canal (linha/polilinha 3D; seção circular, retangular ou trapezoidal): altura da lâmina por Manning |
+| `SECAOTUBO` | Visualizador das seções de tubo/canal (forma real, escala comum, lâmina d'água por Manning, inserir no desenho) |
+| `CRIASECAOTUBO`, `EDITASECAOTUBO`, `REMOVESECAOTUBO` | Catálogo de seções de tubo/canal |
+| `SARJETACAD`, `SARJETAEDITA`, `SARJETAS`, `SARJETAINFO`, `SARJETAZOOM` | Cadastrar/editar, alterar um campo, listar, dados e localizar sarjetas |
 | `HIDROGRAMA` | Gera um hidrograma (tipo à escolha), guarda na bacia e abre o visualizador |
 | `HIDROGRAMAVER` | Visualizador: vários hidrogramas sobrepostos, tabela, exportação CSV, exclusão |
 
@@ -191,9 +199,10 @@ Depois compacte `dist/Hydro.bundle` e distribua com `build/instalar.bat`.
 ## 7. Bacias, métodos e hidrogramas (resumo)
 
 1. `ATUALIZAIDF` (parâmetros da IDF) e, se tiver, `ATUALIZASUPERFICIE` (TIN).
-2. `BACIACAD`: contorno, talvegue, nome, **método de tc** (Kirpich, Ventura,
-   Pasini, Corps, Giandotti, George Ribeiro, cinemático ou informado), C e CN.
-   Fica gravado **na polilinha do contorno** e é o **cadastro comum** usado
+2. `BACIACAD`: contorno, nome, C e CN, **método de tc** (Kirpich, Ventura,
+   Pasini, Corps, Giandotti, George Ribeiro, cinemático) ou tc informado e o
+   talvegue (opcional: sem ele, digite comprimento e declividade). O cadastro
+   **não calcula**: o tc nasce no cálculo (`BACIA`). Fica gravado **na polilinha do contorno** e é o **cadastro comum** usado
    também pelas sarjetas.
 3. `BACIA`: usa o cadastro; informe o TR, escolha o **método chuva-vazão**
    (catálogo) e responda os parâmetros (C e CN do cadastro já vêm como padrão).
@@ -208,7 +217,7 @@ Depois compacte `dist/Hydro.bundle` e distribua com `build/instalar.bat`.
    saída e tempo máximo; **recalcula os montantes sozinho**). Ao criar um objeto o Hydro
    oferece ligá-lo na hora. e `LIGACOES` (tabela e árvore). Calcule **de montante para
    jusante** (bacias, sarjetas), com o mesmo método e TR.
-   O **receptor** guarda a lista `MONTANTE` no `PARAMS` dele (uma única fonte de verdade).
+   A **origem** guarda o destino único (`JUSANTE`) no `PARAMS` dela; os montantes são derivados (uma origem nunca tem dois destinos).
 7. Métodos novos (chuva-vazão, **tempo de concentração**), tipos de hidrograma e
    **tipos de objeto hidráulico** entram por cadastro, sem alterar nada que já
    existe: `docs/template_metodo.lsp` e `docs/template_objeto.lsp`.

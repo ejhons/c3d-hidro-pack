@@ -59,7 +59,12 @@ CORES = {
     20: (24, 128, 106),    # Bacias            verde-agua
     30: (214, 117, 28),    # Hidrogramas       laranja
     40: (112, 72, 160),    # Objetos e ligacoes roxo
-    50: (176, 58, 58),     # Sarjetas e secoes vermelho
+    45: (200, 72, 72),     # Sarjetas          vermelho vivo
+    46: (0, 124, 145),     # Tubos e canais    azul-petroleo
+    47: (150, 96, 40),     # Estruturas        marrom
+    48: (92, 140, 60),     # Escadas hidraulicas verde-oliva
+    50: (176, 58, 58),     # Secoes de sarjeta vermelho escuro
+    55: (166, 124, 0),     # Etiquetas         ocre
     60: (96, 112, 128),    # Texto e parametros cinza-azulado
     90: (64, 64, 64),      # Sistema           cinza escuro
 }
@@ -72,12 +77,26 @@ CODIGOS = {
     'bacia.texto': 'TXT', 'bacia.info': 'INF', 'bacia.lista': 'LST', 'bacia.tabela': 'TAB',
     'hid.gerar': 'HID', 'hid.ver': 'VER',
     'obj.cadastrar': 'OBJ', 'obj.info': 'INF', 'lig.ligar': 'LIG', 'lig.desligar': 'DES',
-    'obj.calcular': 'CAL', 'lig.tabela': 'TAB', 'lig.validar': 'VAL', 'obj.remover': 'DEL',
+    'obj.calcular': 'CAL', 'lig.tabela': 'TAB', 'lig.ver': 'VIS', 'lig.validar': 'VAL', 'obj.remover': 'DEL',
     'sarj.calc1': 'SA1', 'sarj.calc3': 'SA3', 'sarj.txt1': 'TX1', 'sarj.txt3': 'TX3',
     'secao.ver': 'SEC', 'secao.criar': 'NEW', 'secao.atual': 'SEL', 'sarj.params': 'PAR',
     'txt.runoff': 'RUN', 'txt.altura': 'ALT', 'txt.rotacao': 'ROT',
     'sis.dados': 'DB', 'sis.dump': 'TXT', 'sis.plugins': 'PLG', 'sis.reload': 'RLD',
     'sis.dir': 'DIR', 'sis.macros': 'MAC', 'sis.macroestilo': 'MST', 'sis.teste': 'TST',
+    'bacia.edita': 'EDT', 'bacia.zoom': 'ZM',
+    'obj.listar': 'LST', 'obj.zoom': 'ZM', 'obj.vinculos': 'VIN', 'obj.preserva': 'PRE',
+    'obj.cenario': 'CEN', 'obj.propaga': 'PRP', 'obj.caractauto': 'AUT',
+    'sarjeta.cad': 'CAD', 'sarjeta.edita': 'EDT', 'sarjeta.lista': 'LST',
+    'sarjeta.info': 'INF', 'sarjeta.zoom': 'ZM',
+    'tubo.cad': 'CAD', 'tubo.edita': 'EDT', 'tubo.lista': 'LST', 'tubo.info': 'INF',
+    'tubo.zoom': 'ZM', 'tubo.secao.cria': 'NEW', 'tubo.secao.edita': 'SED',
+    'tubo.secao.remove': 'SDL', 'tubo.secao.lista': 'SEC',
+    'secao.editar': 'SED', 'secao.remover': 'SDL',
+    'escada.cad': 'CAD', 'escada.edita': 'EDT', 'escada.lista': 'LST', 'escada.info': 'INF',
+    'escada.zoom': 'ZM',
+    'est.cad': 'CAD', 'est.edita': 'EDT', 'est.lista': 'LST', 'est.info': 'INF', 'est.zoom': 'ZM',
+    'est.tipo.cria': 'NEW', 'est.tipo.edita': 'TED', 'est.tipo.remove': 'TDL', 'est.tipo.lista': 'TIP',
+    'etq.inserir': 'ETQ', 'etq.editar': 'EDT', 'etq.tabela': 'TAB', 'etq.atualizar': 'ATU',
     'sis.menu': 'MNU', 'sis.menuremover': 'MN-', 'sis.barras': 'TLB', 'sis.barrasremover': 'TL-',
 }
 
@@ -143,6 +162,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--formato', choices=('bmp', 'png'), default='bmp')
     ap.add_argument('--so-faltantes', action='store_true', help='nao sobrescreve icones existentes')
+    ap.add_argument('--forcar', nargs='+', metavar='PREFIXO', default=[],
+                    help='com --so-faltantes, sobrescreve tambem os icones cujo nome-base comeca '
+                         'com um destes prefixos (ex.: tubo_ _grupo_46)')
     ap.add_argument('--previa', action='store_true', help='grava build/previa_icones.png (folha de contato)')
     a = ap.parse_args()
 
@@ -170,7 +192,7 @@ def main():
     for nome, cod, cor in pedidos:
         for tam in (16, 24):
             caminho = os.path.join(DESTINO, '%s_%d.%s' % (nome, tam, a.formato))
-            if a.so_faltantes and os.path.exists(caminho):
+            if a.so_faltantes and os.path.exists(caminho)                     and not any(nome.startswith(pf) for pf in a.forcar):
                 continue
             img = desenha(cod, cor, tam)
             img.save(caminho)

@@ -29,7 +29,7 @@
   (setq out (OBJ:Resumo en))
   (setq out
     (append out
-      (list "" "JUSANTE" (strcat "  " (LIG:LinhaJusante en)) "" "MONTANTE (afluentes)")))
+      (list "" "JUSANTE" (strcat "  " (LIG:LinhaJusante en)) "" "MONTANTE (afluentes, derivados)")))
   (setq res (LIG:LinhasArvore en))
   (if res
     (foreach r res (setq out (append out (list (strcat "  " r)))))
@@ -262,11 +262,7 @@
               ((= cod 10)
                 (princ
                   (strcat "\n[HYDRO] Indices reconstruidos: "
-                          (itoa (OBJ:Reindexar)) " objeto(s)"
-                          (if (HYDRO:Has "bacia")
-                            (strcat ", " (itoa (BAC:Reindexar)) " bacia(s)")
-                            "")
-                          "."))
+                          (itoa (OBJ:Reindexar)) " objeto(s)."))
               )
               (T (setq ok nil))
             )

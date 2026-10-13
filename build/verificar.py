@@ -14,8 +14,8 @@ Confere:
   5. defun duplicado no mesmo arquivo
   6. manifesto (HYDRO:Manifest) x arquivos existentes
   7. DCL: dialogo existe, chaves {} balanceadas e tiles usados no LISP existem
-  8. models/*.lsp (exceto objetos_tipos): as 9 secoes padrao, na ordem, e sem "CALCULOS"
-     como grupo de RESULT (ver .claude/skills/hydro-model)
+  8. models/*.lsp (exceto objetos_tipos): as 9 secoes padrao, na ordem, sem "CALCULOS"
+     como grupo de RESULT e sem armazenamento proprio (herdam de objetos.lsp) (ver .claude/skills/hydro-model)
   9. (AVISO, nao erro) comandos c:XXX sem botao no painel (PNL:Acao)
  10. icones: o padrao (_padrao_16/24) deve existir (erro); acao/grupo sem icone (aviso)
 """
@@ -27,11 +27,12 @@ import sys
 RAIZ = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 BUNDLE = os.path.join(RAIZ, 'Hydro.bundle', 'Contents')
 PREFIXOS = ('HYDRO', 'DB', 'XD', 'PREC', 'SARJ', 'VIEW', 'SJT', 'MET', 'TCM', 'BAC',
-            'BTB', 'HID', 'HIET', 'OBJ', 'LIG', 'OTP', 'SOB', 'OBT', 'PNL', 'MNU', 'TLB', 'EXM', 'EXO', 'HB', 'HT', 'OPD', 'OPV', 'AUD', 'PAD', 'SUP', 'ETQ')
+            'BTB', 'HID', 'HIET', 'OBJ', 'LIG', 'OTP', 'SOB', 'OBT', 'PNL', 'MNU', 'TLB', 'EXM', 'EXO', 'HB', 'HT', 'OPD', 'OPV', 'AUD', 'PAD', 'SUP', 'ETQ', 'TUB', 'STB', 'LVW', 'EST', 'TEV', 'TES', 'ESP', 'EBL', 'CAP', 'ESC', 'EDI', 'DIS', 'DUS', 'DEN', 'ESS')
 # (arquivo DCL, dialogo, arquivos .lsp que o usam)
 DIALOGOS = (
     ('idf.dcl', 'idf_dialog', ['views/idf_view.lsp']),
     ('secao.dcl', 'secao_dialog', ['views/secao_view.lsp']),
+    ('secao_tubo.dcl', 'secao_tubo_dialog', ['views/secao_tubo_view.lsp']),
     ('viewer.dcl', 'view_dialog', ['views/viewer.lsp']),
     ('hidrograma.dcl', 'hidro_dialog', ['views/hidrograma_view.lsp']),
     ('bacia_tabela.dcl', 'bacias_dialog', ['views/bacia_tabela.lsp']),
@@ -179,15 +180,22 @@ def main():
                 erro('models/%s: secao "%d. %s" ausente ou fora de ordem' % (nome, i, sec))
                 break
             pos += m.end()
-        # comandos padrao do objeto (docs/arquitetura.md secao 18b): <P>CAD, <P>S, <P>INFO, <P>ZOOM
+        # comandos padrao do objeto (docs/arquitetura.md secao 18b): <P>CAD, <P>S, <P>INFO, <P>ZOOM, <P>EDITA
         # (P = nome do arquivo em maiusculas; bacia.lsp -> BACIACAD, BACIAS, BACIAINFO, BACIAZOOM)
         pref = os.path.splitext(nome)[0].upper()
         defs = {m.upper() for m in re.findall(r'^\(defun c:([A-Za-z0-9_]+)', txt, re.M)}
-        for suf in ('CAD', 'S', 'INFO', 'ZOOM'):
+        for suf in ('CAD', 'S', 'INFO', 'ZOOM', 'EDITA'):
             if pref + suf not in defs:
                 erro('models/%s: falta o comando padrao c:%s%s' % (nome, pref, suf))
         if re.search(r'\(cons "CALCULOS"|"CALCULOS" \. \(', txt):
             erro('models/%s: RESULT nao usa mais o grupo "CALCULOS" (use VAZAO, HIDRAULICA...)' % nome)
+        # armazenamento padronizado: models herdam da classe base (objetos.lsp); ganchos, nao ARMAZENAMENTO
+        if re.search(r'^\s*\(cons "ARMAZENAMENTO"', txt, re.M):
+            erro('models/%s: declara ARMAZENAMENTO proprio; herde da classe base e use os ganchos '
+                 '(CARACTERIZA, AO-REMOVER) e OBJ:Salvar (arquitetura.md 18.5)' % nome)
+        if re.search(r'\(defun [A-Z]+:(Gravar|Listar|Reindexar|Remover) ', txt):
+            erro('models/%s: define Gravar/Listar/Reindexar/Remover proprios; use OBJ:GravaRegistro, '
+                 'OBJ:ListaTipo, OBJ:ReindexaTipo, OBJ:Remover' % nome)
 
     print('[9/10] comandos sem botao no painel (aviso)')
     comandos = set()

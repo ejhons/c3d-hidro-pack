@@ -5,7 +5,7 @@
 ;;; (fechada) + uma polilinha de TALVEGUE. So a funcionalidade do OBJETO:
 ;;; registro, caracterizacao, tempo de concentracao, calculo de vazao e a
 ;;; declaracao do tipo "bacia" no catalogo de objetos. Tambem traz os COMANDOS de
-;;; linha de comando (BACIACAD, BACIA, BACIAS, BACIAINFO) e as perguntas deles,
+;;; linha de comando (BACIACAD, BACIAEDITA, BACIA, BACIAS, BACIAINFO, BACIAZOOM),
 ;;; para o objeto funcionar com um unico .lsp. Texto inserido no desenho fica em
 ;;; views/bacia_view.lsp; o dialogo em views/bacia_tabela.lsp.
 ;;;
@@ -27,30 +27,43 @@
 ;;;   trabalha diretamente com ele ("dados" nas funcoes abaixo):
 ;;;     (("VERSAO" . 2) ("TIPO" . "bacia") ("NOME" . n) ("DESCRICAO" . txt)
 ;;;      ("PARAMS" . (("TALVEGUE" . "handle")            ; componente da bacia
-;;;                   ("MONTANTE" . (("h1" . T) ("h2")))))  ; opcional; ver ligacao.lsp
-;;;      ("ATRIB"  . (("C" . 0.6) ("CN" . 80.0)))       ; definidos pelo usuario
-;;;      ("CARACT" . (("AREA" . m2) ("COMP" . m) ("DESNIVEL" . m) ("DECL" . m/m)))
-;;;      ("RESULT" . (("TC"          . (("MIN" . min) ("ORIGEM" . id | "usuario")
-;;;                                     ("PARAMS" . alist)))
-;;;                   ("VAZAO"       . (vazao ...))
-;;;                   ("HIDROGRAMAS" . (...)))))         ; plugin hidrograma
-;;;     vazao = (("METODO" . id) ("TR" . anos) ("DUR" . min) ("TC" . min)
-;;;              ("PARAMS" . alist)
-;;;              ("I" . mm/h) ("P" . mm) ("PE" . mm) ("QP" . m3/s) ("VOLUME" . m3))
-;;;   RESULT guarda GRUPOS com nome (TC, VAZAO, HIDROGRAMAS), e os campos
-;;;   calculados ficam direto na entrada do grupo, sem sub-lista "RES".
-;;;   Uma vazao com o mesmo METODO e TR substitui a anterior.
+;;;                   ("JUSANTE" . ("h1" . T))))         ; destino, opcional; ver ligacao.lsp
+;;;      ("ATRIB"  . (("C" . 0.6) ("CN" . 80.0)         ; definidos pelo usuario
+;;;                   ("TC-METODO" . id) ("TC-USUARIO" . min)))   ; 0 = calcular pelo metodo
+;;;      ("CARACT" . (("AREA" . m2) ("COMP" . m) ("DESNIVEL" . m) ("DECL" . m/m)
+;;;                   ("MANUAL" . chaves)))             ; do desenho ou digitado (CARACT-DEFS)
+;;;      ("RESULT" . (("TR25" . cenario) ...)))          ; por CENARIO (plano_resultados_cenarios)
+;;;     cenario = (("CENARIO" ("TR" . 25.0) ["OBSOLETO" . T])
+;;;                ("TC"           ("VALOR" . min) ("METODO" . id | "usuario") ("INPUT" . alist))
+;;;                ("PRECIPITACAO" ("VALOR" . mm|mm/h) ("UNIDADE" ..) ("I" ..) ("P" ..) ("PE" ..))
+;;;                ("ENTRADA"      ("VALOR" . m3/s) ("TC" . min) ("AREA" . m2))   ; so com montantes
+;;;                ("VAZAO"        ("VALOR" . m3/s) ("TC" . min) ("METODO" . id) ("DUR" ..)
+;;;                                ("VOLUME" ..) ("INPUT" . alist) ("QP-PROPRIO" ..) ...)
+;;;                ("HIDROGRAMA"   ("VALOR" . Qp m3/s) ("TIPO" . id) ("TP" ..) ("TB" ..)
+;;;                                ("VOLUME" ..) ("DUR" ..) ("INPUT" ..) ("PONTOS" . ((t . q) ...))))
+;;;   O TIPO do hidrograma e definido na bacia (ATRIB HIDROGRAMA-TIPO); o grupo HIDROGRAMA e
+;;;   gerado por HIDROGRAMA (plugin hidrograma) e removido quando a vazao do cenario e recalculada.
+;;;   Campos planos por grupo; um resultado por grupo em cada cenario (recalcular substitui).
+;;;   Adaptadores em formato "plano" (so para texto e menus): BAC:Vazao (lista, um por
+;;;   cenario com vazao), BAC:CalcDe dados cenario, BAC:Tc.
 ;;;   Acompanha a entidade ao copiar, colar e salvar o desenho.
-;;;   BAC:Ler / BAC:Gravar sao a porta de armazenamento do tipo "bacia".
+;;;   Armazenamento HERDADO da classe base (objetos.lsp), igual ao da sarjeta: BAC:Ler e
+;;;   so a leitura tipada (OBJ:RegistroDe); grava com OBJ:GravaRegistro "bacia".
 ;;;   Valores nil nao sao gravados.
 ;;;
 ;;; TEMPO DE CONCENTRACAO
 ;;;   Metodos no catalogo "metodo-tc" (registry/tempo_conc). Sem ele, so Kirpich.
-;;;   O tc fica gravado no cadastro (com o metodo usado) e e reutilizado.
+;;;   O CADASTRO NAO CALCULA: guarda so o metodo (ATRIB TC-METODO) ou o valor informado
+;;;   (TC-USUARIO > 0). O tc nasce em BAC:Preparar (no calculo): rele o desenho
+;;;   (OBJ:AtualizaCaract), aplica BAC:TcDe (tc minimo do projeto); o grupo TC do cenario
+;;;   e gravado junto com o resto do calculo (BAC:_CalcularEGravar).
+;;;   Parametros do metodo de tc: padrao do projeto / ultimo usado (HYDRO.TC.<id>.*).
+;;;   TALVEGUE e opcional (PARAMS-DEFS): sem ele, COMP e DECL sao digitados (CARACT-DEFS).
 ;;;
-;;; BACIAS A MONTANTE (PARAMS "MONTANTE", plugin ligacao)
-;;;   TALVEGUE e componente da bacia e continua em campo proprio; MONTANTE lista
-;;;   os objetos que descarregam nela, com o flag "contribui diretamente ao talvegue".
+;;; BACIAS A MONTANTE (PARAMS "JUSANTE" de cada origem, plugin ligacao)
+;;;   TALVEGUE e componente da bacia e continua em campo proprio. Os montantes dela sao
+;;;   os objetos que citam a bacia em JUSANTE (calculados), com o flag "contribui
+;;;   diretamente ao talvegue" gravado na origem.
 ;;;   A bacia e um mecanismo ENTRADA -> SAIDA (ligacao.lsp). Sem montante so tem SAIDA
 ;;;   (a propria). Com montantes (BAC:_CalcularEGravar):
 ;;;     ENTRADA  Q = soma das saidas dos montantes, tc = maior tempo de saida (grupo
@@ -64,15 +77,16 @@
 ;;;   Os montantes devem ser calculados antes, com o mesmo METODO e TR.
 ;;;
 ;;; EVENTOS EMITIDOS
-;;;   "bacia.cadastrada" "BACIA" "TALVEGUE" (enames) "NOME" + caracteristicas
-;;;   "bacia.calculada"  "BACIA" "TALVEGUE" "NOME" "AREA" "COMP" "DECL" "TC"
+;;;   "objeto.cadastrado" "OBJETO" "TIPO" ("bacia"), emitido por OBJ:Salvar ao fim do
+;;;                      cadastro generico; o talvegue sai de PARAMS (OBJ:ParamsDe)
+;;;   "bacia.calculada"  "BACIA" "TALVEGUE" "CENARIO" "NOME" "AREA" "COMP" "DECL" "TC"
 ;;;                      "METODO" "TR" "DUR" "QP" "PE" "VOLUME"
-;;;   "bacia.removida"   "BACIA" (emitido antes de apagar o cadastro)
+;;;   "objeto.removido"  "OBJETO" (OBJ:Remover; antes de apagar; gancho AO-REMOVER limpa XData)
 ;;;
 ;;; TIPO DE OBJETO
 ;;;   Ao fim deste arquivo a bacia se declara no catalogo "objeto-hidraulico"
-;;;   (se o plugin objetos estiver carregado), com o armazenamento proprio
-;;;   (indice HYDRO.BACIAS) e as capacidades de vazao, area e destino padrao.
+;;;   (se o plugin objetos estiver carregado), sem armazenamento proprio
+;;;   (indice HYDRO.OBJETOS, o da classe base) e as capacidades de vazao, area e destino padrao.
 ;;; ============================================================
 (vl-load-com)
 
@@ -89,42 +103,11 @@
   (list (cons "ERRO" msg))
 )
 
-;; remove pares sem valor (nil nao e gravado no cadastro)
-(defun BAC:_Limpa (pares)
-  (vl-remove-if (function (lambda (x) (null (cdr x)))) pares)
-)
-
-(defun BAC:_Val (chave dados)
-  (cdr (assoc chave dados))
-)
+;; Utilitarios de alist (OBJ:_Limpa, OBJ:_Val, OBJ:_SetChave) vem da classe base.
 
 ;; alist sem as chaves da lista
 (defun BAC:_SemChaves (pares chaves)
   (vl-remove-if (function (lambda (x) (member (car x) chaves))) pares)
-)
-
-;; x e y iguais a menos de 1e-6 (relativo)?
-(defun BAC:_Prox (x y)
-  (if (and x y (equal x y (* 1e-6 (max 1.0 (abs x)))))
-    T
-    nil
-  )
-)
-
-;; Usado para ordenar as bacias pelo handle
-(defun BAC:_HandleLt (h1 h2)
-  (if (= (strlen h1) (strlen h2))
-    (< h1 h2)
-    (< (strlen h1) (strlen h2))
-  )
-)
-
-;; Troca (ou acrescenta) um item de nivel superior; valor nil remove o item
-(defun BAC:_SetChave (dados chave valor)
-  (if valor
-    (append (vl-remove (assoc chave dados) dados) (list (cons chave valor)))
-    (vl-remove (assoc chave dados) dados)
-  )
 )
 
 ;; Nome para exibir: o cadastrado ou "B-<handle>"
@@ -207,223 +190,56 @@
   (if (and z1 z2) (- z2 z1) nil)
 )
 
-;; Caracteriza a bacia (puro).
-;; Retorna alist (AREA COMP DESNIVEL DECL) ou (("ERRO" . msg))
-(defun BAC:Caracterizar (contorno talvegue / surf area comp desn decl)
-  (setq surf (BAC:Superficie))
-  (setq area (BAC:_Area contorno))
-  (setq comp (BAC:_Comprimento talvegue))
-  (setq desn (if comp (BAC:_Desnivel talvegue surf) nil))
-  (if (and comp desn (> comp 0.0))
-    (setq decl (/ (abs desn) comp))
-  )
-  (cond
-    ((not area)
-      (BAC:_Erro "Nao foi possivel obter a area do contorno.")
-    )
-    ((or (not comp) (<= comp 0.0))
-      (BAC:_Erro "Nao foi possivel obter o comprimento do talvegue.")
-    )
-    ((not desn)
-      (BAC:_Erro "Nao foi possivel obter o desnivel (ponto fora da superficie?).")
-    )
-    ((not (and decl (> decl 0.0)))
-      (BAC:_Erro
-        "Declividade nula. Defina a superficie (ATUALIZASUPERFICIE) ou use polilinha 3D.")
-    )
-    (T
-      (list
-        (cons "AREA" area)
-        (cons "COMP" comp)
-        (cons "DESNIVEL" (abs desn))
-        (cons "DECL" decl)
-      )
+;; Caracteriza a bacia pelo desenho (capacidade CARACTERIZA; nao pergunta nada).
+;;   contorno : ename da polilinha do contorno
+;;   vinculos : alist (chave . ename) de PARAMS-DEFS; "TALVEGUE" e opcional
+;;   retorno: alist parcial (AREA COMP DESNIVEL DECL). O que nao der para ler (sem
+;;            talvegue, ponto fora da superficie) nao entra; o cadastro pergunta
+;;            AREA, COMP e DECL (CARACT-DEFS) e o calculo exige os que faltarem.
+(defun BAC:Caracterizar (contorno vinculos / talv comp desn)
+  (setq talv (cdr (assoc "TALVEGUE" vinculos)))
+  (setq comp (if talv (BAC:_Comprimento talv) nil))
+  (setq desn
+    (if (and comp talv)
+      (vl-catch-all-apply 'BAC:_Desnivel (list talv (BAC:Superficie)))
+      nil))
+  (if (vl-catch-all-error-p desn) (setq desn nil))
+  (OBJ:_Limpa
+    (list
+      (cons "AREA" (BAC:_Area contorno))
+      (cons "COMP" (if (and comp (> comp 0.0)) comp nil))
+      (cons "DESNIVEL" (if desn (abs desn) nil))
+      (cons "DECL" (if (and comp desn (> comp 0.0)) (/ (abs desn) comp) nil))
     )
   )
 )
 
-;; a geometria caracterizada mudou em relacao a gravada?
-(defun BAC:_GeomIgual (a b)
-  (if (and (BAC:_Prox (BAC:_Val "AREA" a) (BAC:_Val "AREA" b))
-           (BAC:_Prox (BAC:_Val "COMP" a) (BAC:_Val "COMP" b))
-           (BAC:_Prox (BAC:_Val "DESNIVEL" a) (BAC:_Val "DESNIVEL" b)))
-    T
-    nil
-  )
-)
 
 
 ;;; ------------------------------------------------------------
 ;;; 3. LER, GRAVAR, EDITAR, REMOVER
 ;;; ------------------------------------------------------------
-;; Le o cadastro: o registro padrao, se a entidade e uma bacia
-(defun BAC:Ler (en / reg)
-  (setq reg (HYDRO:DadoLer en "HYDRO-OBJ"))
-  (if (and reg (equal (BAC:_Val "TIPO" reg) "bacia"))
-    reg
-    nil
-  )
+;; A bacia HERDA a porta de armazenamento da classe base (objetos.lsp), como a sarjeta:
+;;   ler      OBJ:RegistroDe (BAC:Ler abaixo)   gravar   OBJ:GravaRegistro "bacia"
+;;   listar   OBJ:ListaTipo "bacia"             indice   HYDRO.OBJETOS (unico)
+;;   remover  OBJ:Remover (emite "objeto.removido"; limpeza propria em BAC:_AoRemover)
+;;   cadastro  generico (OBJ:CadastroInterativoTipo / OBJ:CadastrarCom): ATRIB, vinculo do
+;;             TALVEGUE (PARAMS-DEFS) e CARACT; nunca calcula (o tc nasce em BAC:Preparar)
+;;   editar    BACIACAD (tudo) ou BACIAEDITA (um campo), os fluxos genericos OPV:*
+;; Sem ARMAZENAMENTO proprio: nada a declarar na secao 8.
+
+;; Registro padrao se a entidade e uma bacia, senao nil (leitura tipada)
+(defun BAC:Ler (en)
+  (OBJ:RegistroDe en "bacia")
 )
 
-;; Indice das bacias (so handles) para listar sem varrer o desenho
-(defun BAC:_Indexar (en / h lista)
-  (setq h (HYDRO:Handle en))
-  (setq lista (HYDRO:Get "HYDRO.BACIAS" nil))
-  (if (not (member h lista))
-    (HYDRO:Set "HYDRO.BACIAS" (append lista (list h)))
-  )
-)
-
-;; Grava o registro e indexa. Retorna dados ou nil
-(defun BAC:Gravar (en dados)
-  (if (HYDRO:DadoGravar en "HYDRO-OBJ" dados)
-    (progn (BAC:_Indexar en) dados)
-    nil
-  )
-)
-
-;; Enames das bacias conhecidas que ainda existem e tem cadastro
-(defun BAC:Listar (/ out h en)
-  (foreach h (HYDRO:Get "HYDRO.BACIAS" nil)
-    (setq en (handent h))
-    (if (and en (BAC:Ler en))
-      (setq out (append out (list en)))
-    )
-  )
-  out
-)
-
-;; Reconstroi o indice varrendo o desenho (use se o indice estiver vazio,
-;; por exemplo apos colar bacias de outro desenho). Retorna a quantidade.
-(defun BAC:Reindexar (/ ss i en lista)
-  (setq ss (ssget "_X" '((0 . "LWPOLYLINE,POLYLINE,SPLINE"))))
-  (if ss
-    (progn
-      (setq i (sslength ss))
-      (while (> i 0)
-        (setq i (1- i))
-        (setq en (ssname ss i))
-        (if (BAC:Ler en)
-          (setq lista (cons (HYDRO:Handle en) lista))
-        )
-      )
-    )
-  )
-  (setq lista (vl-sort lista 'BAC:_HandleLt))
-  (HYDRO:Set "HYDRO.BACIAS" lista)
-  (length lista)
-)
-
-;; Grava o cadastro mantendo DESCRICAO e os resultados ja existentes (vazoes,
-;; hidrogramas). tc = (("MIN" . min) ("ORIGEM" . id) ("PARAMS" . alist))
-(defun BAC:Cadastrar (contorno talvegue nome atrib caract tc / dados novo)
-  (setq dados (BAC:Ler contorno))
-  (setq novo
-    (BAC:_Limpa
-      (list
-        (cons "VERSAO" 2)
-        (cons "TIPO" "bacia")
-        (cons "NOME" nome)
-        (cons "DESCRICAO" (BAC:Descricao dados))
-        ;; preserva os outros vinculos (MONTANTE); so o TALVEGUE e trocado
-        (cons "PARAMS" (BAC:_SetChave (BAC:Params dados) "TALVEGUE" (HYDRO:Handle talvegue)))
-        (cons "ATRIB" atrib)
-        (cons "CARACT" caract)
-        (cons "RESULT"
-          (BAC:_Limpa
-            (list (cons "TC" (BAC:_Limpa tc))
-                  (cons "VAZAO" (BAC:Vazao dados))
-                  (cons "HIDROGRAMAS" (BAC:Hidrogramas dados)))))
-      )
-    )
-  )
-  (BAC:Gravar contorno novo)
-  (HYDRO:Emit "bacia.cadastrada"
-    (append
-      ;entidades
-      (list (cons "BACIA" contorno) (cons "TALVEGUE" talvegue))
-      ; nome cadastrado
-      (BAC:_Limpa (list (cons "NOME" nome)))
-      ; caracteríticas da geometria
-      caract
-      ; Cálculo do tempo de concentração
-      (BAC:_Limpa
-        (list (cons "TC" (BAC:_Val "MIN" tc))
-              (cons "TC-ORIGEM" (BAC:_Val "ORIGEM" tc))))
-    )
-  )
-  novo
-)
-
-;; Obtem o cadastro (usado tambem pelo calculo de sarjetas). Se a bacia nao esta
-;; cadastrada, cadastra automaticamente (Kirpich, respeitando o tc minimo).
-;; Se o contorno/talvegue/superficie mudaram, atualiza mantendo nome,
-;; atributos e o metodo de tc. Retorna o contexto (BAC:_Ctx) ou (("ERRO" . msg)).
-(defun BAC:Obter (contorno talvegue /
-                  dados caract h old id params r tcmin tc)
-  (setq dados (BAC:Ler contorno))
-  (setq caract (BAC:Caracterizar contorno talvegue))
-  (setq h (HYDRO:Handle talvegue))
-  (cond
-    ; retorna erro caso processo não seja bem sucedido
-    ((assoc "ERRO" caract) caract)
-    ; retorna o contexto de cálculo como dicionário achatado.
-    ((and dados
-          (equal (BAC:Talvegue dados) h)
-          (BAC:_GeomIgual caract (BAC:Caract dados)))
-      (BAC:_Ctx dados)
-    )
-    (T
-      (setq old (BAC:Tc dados))
-      (setq tcmin (HYDRO:Get "HYDRO.TC.MINIMO" 10.0))
-      (setq id (BAC:_Val "ORIGEM" old))
-      (setq id (if (and id (not (equal id "usuario")) (BAC:_MetodoTcOk id)) id "kirpich"))
-      ; Define params como o último usado ou default do método calculado
-      (setq params
-        (if (and (BAC:_Val "PARAMS" old) (equal id (BAC:_Val "ORIGEM" old)))
-          (BAC:_Val "PARAMS" old)
-          (BAC:_ParamsTc id)
-        )
-      )
-
-      (setq r (BAC:CalcularTc id caract params))
-      (if (assoc "ERRO" r)
-        (progn
-          (setq id "kirpich")
-          (setq params nil)
-          (setq r (BAC:CalcularTc id caract nil))
-        )
-      )
-      (if (assoc "ERRO" r)
-        r
-        (progn
-          (setq tc
-            (list (cons "MIN" (max (BAC:_Val "TC" r) tcmin))
-                  (cons "ORIGEM" id)
-                  (cons "PARAMS" params)))
-          (BAC:Cadastrar contorno talvegue (BAC:Nome dados) (BAC:Atrib dados) caract tc)
-          (princ
-            (strcat "\n[BACIA] "
-                    (if dados "Cadastro atualizado" "Bacia cadastrada automaticamente")
-                    " (handle " (HYDRO:Handle contorno) ")."))
-          (BAC:_Ctx (BAC:Ler contorno))
-        )
-      )
-    )
-  )
-)
-
-;; Remove o cadastro da bacia (e as marcas de XData, se o plugin existir).
-;; Emite "bacia.removida" ANTES de apagar, para quem guarda ligacoes.
-(defun BAC:Remover (en / dados talv h)
-  (HYDRO:Emit "bacia.removida" (list (cons "BACIA" en)))
-  (setq dados (BAC:Ler en))
-  (setq h (BAC:Talvegue dados))
-  (setq talv (if h (handent h) nil))
-  (HYDRO:DadoApagar en "HYDRO-OBJ")
-  (HYDRO:Set "HYDRO.BACIAS" (vl-remove (HYDRO:Handle en) (HYDRO:Get "HYDRO.BACIAS" nil)))
+;; Gancho "AO-REMOVER" do tipo (chamado por OBJ:Remover, com o registro ainda
+;; gravado): limpa as marcas de XData da bacia e do talvegue, se o plugin existir.
+(defun BAC:_AoRemover (en / talv h)
   (if (HYDRO:Has "xdata")
     (progn
+      (setq h (BAC:Talvegue (BAC:Ler en)))
+      (setq talv (if h (handent h) nil))
       (vl-catch-all-apply 'XD:RemoveApp (list en "DREN-BACIA"))
       (if talv (vl-catch-all-apply 'XD:RemoveApp (list talv "DREN-BACIA")))
     )
@@ -436,17 +252,75 @@
 ;;; 4. CAMPOS (CARACT, PARAMS e ATRIB)
 ;;; ------------------------------------------------------------
 ;; Acessos ao registro (secao 18 de docs/arquitetura.md)
-(defun BAC:Nome (dados)       (BAC:_Val "NOME" dados))
+(defun BAC:Nome (dados)       (OBJ:_Val "NOME" dados))
 
-(defun BAC:Descricao (dados)  (BAC:_Val "DESCRICAO" dados))
+(defun BAC:Descricao (dados)  (OBJ:_Val "DESCRICAO" dados))
 
-(defun BAC:Params (dados)     (BAC:_Val "PARAMS" dados))
+(defun BAC:Params (dados)     (OBJ:_Val "PARAMS" dados))
 
-(defun BAC:Talvegue (dados)   (BAC:_Val "TALVEGUE" (BAC:Params dados)))
+(defun BAC:Talvegue (dados)   (OBJ:_Val "TALVEGUE" (BAC:Params dados)))
 
-(defun BAC:Atrib (dados)      (BAC:_Val "ATRIB" dados))
+(defun BAC:Atrib (dados)      (OBJ:_Val "ATRIB" dados))
 
-(defun BAC:Caract (dados)     (BAC:_Val "CARACT" dados))
+(defun BAC:Caract (dados)     (OBJ:_Val "CARACT" dados))
+
+;; ids dos metodos de tc cadastrados (opcoes dinamicas de TC-METODO); sem o plugin, kirpich
+(defun BAC:_IdsTc (/ ids)
+  (setq ids (mapcar 'car (HYDRO:RegList "metodo-tc")))
+  (if ids ids (list "kirpich"))
+)
+
+;; ids dos tipos de hidrograma cadastrados (opcoes dinamicas de HIDROGRAMA-TIPO)
+(defun BAC:_IdsHid (/ ids)
+  (setq ids (mapcar 'car (HYDRO:RegList "hidrograma-tipo")))
+  (if ids ids (list "triangular-scs"))
+)
+
+;; ATRIB (o usuario define): (chave rotulo padrao unidade [tipo [opcoes]]). C e CN valem
+;; como padrao dos metodos; o tc e escolhido AQUI (metodo ou valor) e calculado so no calculo.
+(defun BAC:_AtribDefs ()
+  (list
+    (list "C" "Coeficiente de escoamento C" 0.6 "")
+    (list "CN" "Numero da curva CN (1 a 100)" 75.0 "")
+    (list "TC-METODO" "Metodo do tempo de concentracao" "kirpich" "" "opcoes" 'BAC:_IdsTc)
+    (list "TC-USUARIO" "tc informado (0 = calcular pelo metodo)" 0.0 "min")
+    (list "HIDROGRAMA-TIPO" "Tipo de hidrograma" "triangular-scs" "" "opcoes" 'BAC:_IdsHid)
+  )
+)
+
+;; PARAMS-DEFS: entidades de apoio pedidas no cadastro (chave rotulo aceita [obrigatorio])
+(defun BAC:_VinculosDefs ()
+  (list
+    (list "TALVEGUE" "a polilinha do TALVEGUE (Enter = pular)"
+          '("LWPOLYLINE" "POLYLINE" "SPLINE"))
+  )
+)
+
+;; CARACT-DEFS: o que se digita quando o desenho nao informa
+(defun BAC:_CaractDefs ()
+  (list
+    (list "AREA" "Area da bacia" 0.0 "m2")
+    (list "COMP" "Comprimento do talvegue" 0.0 "m")
+    (list "DECL" "Declividade do talvegue" 0.0 "m/m")
+  )
+)
+
+;; PADROES: C e CN iniciais = padrao do projeto (comando PADROES), se definido
+(defun BAC:_Padroes (en / c cn)
+  (setq c (HYDRO:Padrao "HYDRO.MET.racional." "C"))
+  (setq cn (HYDRO:Padrao "HYDRO.MET.scs-cn." "CN"))
+  (OBJ:_Limpa (list (cons "C" c) (cons "CN" cn)))
+)
+
+;; CARACT para calculo: o gravado, com DESNIVEL = DECL * COMP se so esses foram digitados
+(defun BAC:_CaractCalc (dados / c)
+  (setq c (BAC:Caract dados))
+  (if (and (not (assoc "DESNIVEL" c)) (assoc "DECL" c) (assoc "COMP" c))
+    (append c
+      (list (cons "DESNIVEL" (* (cdr (assoc "DECL" c)) (cdr (assoc "COMP" c))))))
+    c
+  )
+)
 
 ;; Atributos da bacia que coincidem com parametros do metodo viram padrao
 ;; (ex.: atributo CN preenche o parametro CN do SCS)
@@ -460,15 +334,15 @@
 )
 
 ;; Contexto de calculo da bacia (NAO e o que fica gravado): caracteristicas,
-;; "TC" e "TC-ORIGEM", "NOME" e os atributos (C, CN...)
-(defun BAC:_Ctx (dados / tc)
-  (setq tc (BAC:Tc dados))
+;; "TC", "TC-ORIGEM" e "TC-PARAMS" (de `tc`, resultado de BAC:TcDe), "NOME" e os atributos
+(defun BAC:_Ctx (dados tc)
   (append
-    (BAC:Caract dados)
-    (BAC:_Limpa
+    (BAC:_CaractCalc dados)
+    (OBJ:_Limpa
       (list (cons "NOME" (BAC:Nome dados))
-            (cons "TC" (BAC:_Val "MIN" tc))
-            (cons "TC-ORIGEM" (BAC:_Val "ORIGEM" tc))))
+            (cons "TC" (OBJ:_Val "MIN" tc))
+            (cons "TC-ORIGEM" (OBJ:_Val "ORIGEM" tc))
+            (cons "TC-PARAMS" (OBJ:_Val "PARAMS" tc))))
     (BAC:Atrib dados)
   )
 )
@@ -477,47 +351,147 @@
 ;;; ------------------------------------------------------------
 ;;; 5. RESULTADOS (RESULT)
 ;;; ------------------------------------------------------------
-(defun BAC:Result (dados)     (BAC:_Val "RESULT" dados))
+(defun BAC:Result (dados)     (OBJ:_Val "RESULT" dados))
 
-;; tc: (("MIN" . min) ("ORIGEM" . id | "usuario") ("PARAMS" . alist))
-(defun BAC:Tc (dados)         (BAC:_Val "TC" (BAC:Result dados)))
-
-;; vazoes: lista de (("METODO" ..) ("TR" ..) ("DUR" ..) ("TC" ..) ("PARAMS" ..)
-;;                   ("I" ..) ("P" ..) ("PE" ..) ("QP" ..) ("VOLUME" ..))
-(defun BAC:Vazao (dados)      (BAC:_Val "VAZAO" (BAC:Result dados)))
-
-(defun BAC:Hidrogramas (dados) (BAC:_Val "HIDROGRAMAS" (BAC:Result dados)))
-
-;; Idem _SetChave, para um grupo dentro de RESULT ("TC", "VAZAO", "HIDROGRAMAS")
-(defun BAC:_SetResult (dados chave valor)
-  (BAC:_SetChave dados "RESULT" (BAC:_SetChave (BAC:Result dados) chave valor))
-)
-
-(defun BAC:_MesmaVazao (a b)
-  (if (and (equal (BAC:_Val "METODO" a) (BAC:_Val "METODO" b))
-           (equal (BAC:_Val "TR" a) (BAC:_Val "TR" b) 1e-9))
-    T
+;; tc de UM cenario no formato plano (("MIN" . min) ("ORIGEM" . id | "usuario") ("PARAMS" . alist)),
+;; lido do grupo TC do cenario; nil se nao ha
+(defun BAC:TcDeCenario (dados cenario / g)
+  (setq g (OBJ:_Val "TC" (cdr (assoc cenario (BAC:Result dados)))))
+  (if g
+    (OBJ:_Limpa
+      (list (cons "MIN" (OBJ:_Val "VALOR" g))
+            (cons "ORIGEM" (OBJ:_Val "METODO" g))
+            (cons "PARAMS" (OBJ:_Val "INPUT" g))))
     nil
   )
 )
 
-;; Acrescenta uma vazao, substituindo a de mesmo METODO e TR
-(defun BAC:_AddVazao (lista vaz)
-  (append
-    (vl-remove-if
-      (function (lambda (x) (BAC:_MesmaVazao x vaz)))
-      lista
+;; tc para exibir: o do cenario em uso; se ele nao tem tc, o do ultimo cenario que tenha
+(defun BAC:Tc (dados / atual c r)
+  (setq atual (OBJ:CenarioAtual))
+  (setq r (if atual (BAC:TcDeCenario dados atual) nil))
+  (if (null r)
+    (foreach c (BAC:Result dados)
+      (if (OBJ:_Val "TC" (cdr c)) (setq r (BAC:TcDeCenario dados (car c))))
     )
-    (list vaz)
   )
+  r
+)
+
+;; Mapa campo plano da vazao -> campo do grupo VAZAO (QP e o numero principal: VALOR)
+(defun BAC:_MapaVazao ()
+  '(
+    ("QP" . "VALOR") ("TC" . "TC")
+    ("METODO" . "METODO") ("DUR" . "DUR")
+    ("VOLUME" . "VOLUME") ("QP-PROPRIO" . "QP-PROPRIO")
+    ("AREA-TOTAL" . "AREA-TOTAL") ("TC-PROPRIO" . "TC-PROPRIO")
+    ("QP-CALC" . "VALOR-CALC") ("PRESERVADA" . "PRESERVADA")
+    ("PARAMS" . "INPUT")
+    )
+)
+
+;; (puro) Grupos PRECIPITACAO e VAZAO a partir da vazao plana `vaz` (formato do calculo
+;; e dos textos: METODO TR DUR TC PARAMS I P PE QP VOLUME ...). TR e CENARIO nao entram:
+;; vao no grupo CENARIO. Campos desconhecidos ficam em VAZAO.
+(defun BAC:_Grupos (vaz / mapa v p x)
+  (setq mapa (BAC:_MapaVazao))
+  (foreach x vaz
+    (cond
+      ((member (car x) '("TR" "CENARIO")) nil)
+      ((member (car x) '("I" "P" "PE")) (setq p (append p (list x))))
+      ((assoc (car x) mapa)
+        (setq v (append v (list (cons (cdr (assoc (car x) mapa)) (cdr x)))))
+      )
+      (T (setq v (append v (list x))))
+    )
+  )
+  (if p
+    (setq p
+      (append
+        (list (cons "VALOR" (if (assoc "P" p) (cdr (assoc "P" p)) (cdr (assoc "I" p))))
+              (cons "UNIDADE" (if (assoc "P" p) "mm" "mm/h")))
+        p)))
+  (list (cons "PRECIPITACAO" p) (cons "VAZAO" v))
+)
+
+;; (puro) Vazao plana de um cenario (inverso de BAC:_Grupos), ou nil se nao tem VAZAO.
+;; Traz "CENARIO" e "TR" (do grupo CENARIO).
+(defun BAC:_CalcFlat (cenario cen / v p c mapa)
+  (setq v (OBJ:_Val "VAZAO" cen))
+  (setq p (OBJ:_Val "PRECIPITACAO" cen))
+  (setq c (OBJ:_Val "CENARIO" cen))
+  (setq mapa (BAC:_MapaVazao))
+  (if (and v (OBJ:_Val "VALOR" v))
+    (OBJ:_Limpa
+      (append
+        (list (cons "CENARIO" cenario) (cons "TR" (OBJ:_Val "TR" c)))
+        (mapcar
+          (function (lambda (m) (cons (car m) (OBJ:_Val (cdr m) v))))
+          mapa)
+        (list (cons "I" (OBJ:_Val "I" p)) (cons "P" (OBJ:_Val "P" p))
+              (cons "PE" (OBJ:_Val "PE" p)))
+        (vl-remove-if
+          (function (lambda (x) (member (car x) (mapcar 'cdr mapa))))
+          v)))
+    nil
+  )
+)
+
+;; Vazao plana de um cenario do registro `dados`, ou nil
+(defun BAC:CalcDe (dados cenario)
+  (BAC:_CalcFlat cenario (cdr (assoc cenario (BAC:Result dados))))
+)
+
+;; vazoes (formato plano) de todos os cenarios que tem VAZAO, na ordem do registro
+(defun BAC:Vazao (dados / out c x)
+  (foreach c (BAC:Result dados)
+    (setq x (BAC:_CalcFlat (car c) (cdr c)))
+    (if x (setq out (append out (list x))))
+  )
+  out
+)
+
+;; (puro) Hidrograma PLANO de um cenario (formato dos textos e do visualizador: TIPO METODO TR
+;; DUR PARAMS QP TP TB VOLUME NOTA PONTOS + CENARIO), do grupo HIDROGRAMA; nil se nao tem.
+;; METODO e TR vem dos grupos VAZAO e CENARIO (nao sao copiados).
+(defun BAC:_HidFlat (cenario cen / h v c)
+  (setq h (OBJ:_Val "HIDROGRAMA" cen))
+  (setq v (OBJ:_Val "VAZAO" cen))
+  (setq c (OBJ:_Val "CENARIO" cen))
+  (if (and h (OBJ:_Val "PONTOS" h))
+    (OBJ:_Limpa
+      (list
+        (cons "CENARIO" cenario)
+        (cons "TIPO" (OBJ:_Val "TIPO" h))
+        (cons "METODO" (OBJ:_Val "METODO" v))
+        (cons "TR" (OBJ:_Val "TR" c))
+        (cons "DUR" (OBJ:_Val "DUR" h))
+        (cons "PARAMS" (OBJ:_Val "INPUT" h))
+        (cons "QP" (OBJ:_Val "VALOR" h))
+        (cons "TP" (OBJ:_Val "TP" h))
+        (cons "TB" (OBJ:_Val "TB" h))
+        (cons "VOLUME" (OBJ:_Val "VOLUME" h))
+        (cons "NOTA" (OBJ:_Val "NOTA" h))
+        (cons "PONTOS" (OBJ:_Val "PONTOS" h))))
+    nil
+  )
+)
+
+;; hidrogramas (formato plano) de todos os cenarios que tem, na ordem do registro
+(defun BAC:Hidrogramas (dados / out c x)
+  (foreach c (BAC:Result dados)
+    (setq x (BAC:_HidFlat (car c) (cdr c)))
+    (if x (setq out (append out (list x))))
+  )
+  out
 )
 
 ;; maior vazao de pico entre as vazoes calculadas (0.0 se nao ha)
 (defun BAC:_MaxQp (dados / q c)
   (setq q 0.0)
   (foreach c (BAC:Vazao dados)
-    (if (and (BAC:_Val "QP" c) (> (BAC:_Val "QP" c) q))
-      (setq q (BAC:_Val "QP" c))
+    (if (and (OBJ:_Val "QP" c) (> (OBJ:_Val "QP" c) q))
+      (setq q (OBJ:_Val "QP" c))
     )
   )
   q
@@ -528,11 +502,11 @@
 ;; caracteristicas da bacia e os campos calculados (QP, PE, VOLUME...).
 (defun BAC:Contexto (dados vaz)
   (append
-    (BAC:_Limpa
-      (list (cons "TR" (BAC:_Val "TR" vaz))
-            (cons "DUR" (BAC:_Val "DUR" vaz))
-            (cons "METODO" (BAC:_Val "METODO" vaz))
-            (cons "TC" (BAC:_Val "TC" vaz))))
+    (OBJ:_Limpa
+      (list (cons "TR" (OBJ:_Val "TR" vaz))
+            (cons "DUR" (OBJ:_Val "DUR" vaz))
+            (cons "METODO" (OBJ:_Val "METODO" vaz))
+            (cons "TC" (OBJ:_Val "TC" vaz))))
     (BAC:Caract dados)
     (BAC:_SemChaves vaz '("METODO" "TR" "DUR" "TC" "PARAMS"))
   )
@@ -561,17 +535,13 @@
       (TCM:Calcular id caract params)
     )
     ((equal id "kirpich")
-      (setq r (BAC:TcKirpich (BAC:_Val "COMP" caract) (BAC:_Val "DECL" caract)))
+      (setq r (BAC:TcKirpich (OBJ:_Val "COMP" caract) (OBJ:_Val "DECL" caract)))
       (if r (list (cons "TC" r)) (BAC:_Erro "Declividade nula."))
     )
     (T
       (BAC:_Erro "Plugin tempo_conc nao carregado: so o metodo kirpich esta disponivel.")
     )
   )
-)
-
-(defun BAC:_ListaTc ()
-  (HYDRO:RegList "metodo-tc")
 )
 
 ;; Verifica se método está cadastrado ou é default (kirpich)
@@ -587,6 +557,49 @@
     (setq out (append out (list (cons (car d) (if v v (nth 2 d))))))
   )
   out
+)
+
+;; tc da bacia a partir do que esta gravado (puro; nao grava).
+;;   dados   : registro da bacia
+;;   retorno: (("MIN" . min) ("ORIGEM" . id | "usuario") ("PARAMS" . alist)) ou (("ERRO" . msg))
+;; ATRIB TC-USUARIO > 0 vale como esta; senao o metodo de TC-METODO (kirpich se ausente),
+;; com os parametros do projeto / ultimo usado (BAC:_ParamsTc) e o tc minimo do projeto.
+(defun BAC:TcDe (dados / atrib usr id params r)
+  (setq atrib (BAC:Atrib dados))
+  (setq usr (OBJ:_Val "TC-USUARIO" atrib))
+  (if (and usr (> usr 0.0))
+    (list (cons "MIN" usr) (cons "ORIGEM" "usuario"))
+    (progn
+      (setq id (OBJ:_Val "TC-METODO" atrib))
+      (if (not (and id (BAC:_MetodoTcOk id))) (setq id "kirpich"))
+      (setq params (BAC:_ParamsTc id))
+      (setq r (BAC:CalcularTc id (BAC:_CaractCalc dados) params))
+      (if (assoc "ERRO" r)
+        r
+        (list (cons "MIN" (max (OBJ:_Val "TC" r) (HYDRO:Get "HYDRO.TC.MINIMO" 10.0)))
+              (cons "ORIGEM" id)
+              (cons "PARAMS" params))
+      )
+    )
+  )
+)
+
+;; Prepara a bacia para calcular: rele o desenho (OBJ:AtualizaCaract, flag
+;; HYDRO.CARACT.AUTO) e calcula o tc (BAC:TcDe). NAO grava: o grupo TC do cenario vai
+;; junto com o calculo (BAC:_CalcularEGravar).
+;;   retorno: contexto de calculo (BAC:_Ctx) ou (("ERRO" . msg))
+;; E o unico lugar onde o tc nasce; cadastrar e editar nao calculam.
+(defun BAC:Preparar (contorno / dados tc)
+  (setq dados (BAC:Ler contorno))
+  (cond
+    ((not dados) (BAC:_Erro "Bacia nao cadastrada. Use BACIACAD."))
+    (T
+      (OBJ:AtualizaCaract contorno)
+      (setq dados (BAC:Ler contorno))
+      (setq tc (BAC:TcDe dados))
+      (if (assoc "ERRO" tc) tc (BAC:_Ctx dados tc))
+    )
+  )
 )
 
 ;; Executa um metodo do catalogo (puro). Retorna o resultado do metodo ou
@@ -611,28 +624,31 @@
   )
 )
 
-;; Executa, grava a vazao na bacia (RESULT -> "VAZAO") e emite o evento.
-;; Retorna a vazao gravada (campos calculados planos) ou (("ERRO" . msg)).
+;; Executa o metodo, grava o CENARIO (grupos TC, PRECIPITACAO, ENTRADA, VAZAO; uma
+;; gravacao) e emite o evento. `perg` = (TR ID DUR PARAMS CENARIO).
+;; Retorna a vazao PLANA do calculo (para texto) ou (("ERRO" . msg)).
 (defun BAC:_CalcularEGravar (contorno talv cad perg /
-                             ctx res vaz dados id tr dur ent m tcprop tcout comp pr)
-  (setq id  (BAC:_Val "ID" perg))
-  (setq tr  (BAC:_Val "TR" perg))
-  (setq dur (BAC:_Val "DUR" perg))
-  (setq ent (BAC:_Entrada contorno id tr))
+                             ctx res vaz id tr dur ent m tcprop tcout comp pr cenario
+                             grupos g)
+  (setq id  (OBJ:_Val "ID" perg))
+  (setq tr  (OBJ:_Val "TR" perg))
+  (setq dur (OBJ:_Val "DUR" perg))
+  (setq cenario (OBJ:_Val "CENARIO" perg))
+  (setq ent (BAC:_Entrada contorno cenario))
   (cond
     ;; ha montantes mas falta o calculo de algum deles
-    ((and ent (or (BAC:_Val "FALTAM" ent) (null (BAC:_Val "QP" ent))))
+    ((and ent (or (OBJ:_Val "FALTAM" ent) (null (OBJ:_Val "QP" ent))))
       (BAC:_Erro
-        (strcat "Montantes sem calculo para este metodo e TR: "
-                (HYDRO:Join (BAC:_Val "FALTAM" ent) ", ")
+        (strcat "Montantes sem calculo no cenario " cenario ": "
+                (HYDRO:Join (OBJ:_Val "FALTAM" ent) ", ")
                 ". Calcule-os antes, de montante para jusante."))
     )
     (T
       ;; tempo de saida: com montantes, o maior (paralelo ou serie, ver ligacao.lsp)
-      (setq tcprop (BAC:_Val "TC" cad))
+      (setq tcprop (OBJ:_Val "TC" cad))
       (if ent
         (progn
-          (setq tcout (LIG:_TcPuro "concentracao" tcprop (BAC:_Val "CHEGADAS" ent)))
+          (setq tcout (LIG:_TcPuro "concentracao" tcprop (OBJ:_Val "CHEGADAS" ent)))
           (setq m (HYDRO:RegGet "metodo-chuva-vazao" id))
           (setq cad (cons (cons "TC" tcout) cad))
           (if (not (and m (cdr (assoc "USA-DUR" m))))
@@ -641,71 +657,80 @@
         )
       )
       (setq ctx (append (list (cons "TR" tr) (cons "DUR" dur)) cad))
-      (setq res (BAC:ExecutarMetodo id ctx (BAC:_Val "PARAMS" perg)))
+      (setq res (BAC:ExecutarMetodo id ctx (OBJ:_Val "PARAMS" perg)))
       (cond
         ((assoc "ERRO" res) res)
         (T
           (if ent
             (progn
               ;; montantes reavaliados no mesmo tempo maximo; soma com a propria
-              (setq comp (LIG:VazaoMontante contorno id tr tcout))
-              (setq res (BAC:_Compoe res comp (BAC:_Val "AREA" cad) tcprop))
+              (setq comp (LIG:VazaoMontante contorno cenario tcout))
+              (setq res (BAC:_Compoe res comp (OBJ:_Val "AREA" cad) tcprop))
               ;; flag geral: nao deixar o tempo maior reduzir abaixo da entrada
               (setq pr
-                (LIG:Preserva (BAC:_Val "QP" ent) (BAC:_Val "QP" res) (LIG:PreservaAtiva)))
+                (LIG:Preserva (OBJ:_Val "QP" ent) (OBJ:_Val "QP" res) (LIG:PreservaAtiva)))
               (if (cadr pr)
                 (setq res
-                  (BAC:_SetChave
-                    (BAC:_SetChave
-                      (BAC:_SetChave res "QP-CALC" (BAC:_Val "QP" res))
+                  (OBJ:_SetChave
+                    (OBJ:_SetChave
+                      (OBJ:_SetChave res "QP-CALC" (OBJ:_Val "QP" res))
                       "QP" (car pr))
                     "PRESERVADA" T))
               )
             )
           )
+          ;; vazao PLANA do calculo (formato dos textos); o que vai gravado sao os GRUPOS
           (setq vaz
-            (BAC:_Limpa
+            (OBJ:_Limpa
               (append
                 (list
+                  (cons "CENARIO" cenario)
                   (cons "METODO" id)
                   (cons "TR" tr)
-                  (cons "DUR" (if (BAC:_Val "DUR" res) (BAC:_Val "DUR" res) dur))
-                  (cons "TC" (BAC:_Val "TC" cad))
-                  (cons "PARAMS" (BAC:_Val "PARAMS" perg))
+                  (cons "DUR" (if (OBJ:_Val "DUR" res) (OBJ:_Val "DUR" res) dur))
+                  (cons "TC" (OBJ:_Val "TC" cad))
+                  (cons "PARAMS" (OBJ:_Val "PARAMS" perg))
                 )
                 (BAC:_SemChaves res '("METODO" "TR" "DUR" "TC" "PARAMS"))
               )
             )
           )
-          (setq dados (BAC:Ler contorno))
-          (BAC:Gravar contorno
-            (BAC:_SetResult dados "VAZAO" (BAC:_AddVazao (BAC:Vazao dados) vaz)))
-          ;; ENTRADA (o que veio dos montantes), no registro padrao
-          (if (and ent (HYDRO:Has "objetos"))
-            (OBJ:GravarResultado contorno "ENTRADA"
-              (BAC:_Limpa
-                (list (cons "METODO" id)
-                      (cons "TR" tr)
-                      (cons "QP" (BAC:_Val "QP" ent))
-                      (cons "TC" (BAC:_Val "TC" ent))
-                      (cons "AREA" (BAC:_Val "AREA" ent)))))
-          )
+          (setq grupos
+            (append
+              (list
+                (cons "TC"
+                  (list (cons "VALOR" tcprop)
+                        (cons "METODO" (OBJ:_Val "TC-ORIGEM" cad))
+                        (cons "INPUT" (OBJ:_Val "TC-PARAMS" cad)))))
+              (if ent
+                (list
+                  (cons "ENTRADA"
+                    (list (cons "VALOR" (OBJ:_Val "QP" ent))
+                          (cons "TC" (OBJ:_Val "TC" ent))
+                          (cons "AREA" (OBJ:_Val "AREA" ent)))))
+              )
+              (BAC:_Grupos vaz)
+              ;; vazao recalculada: o hidrograma antigo deste cenario nao vale mais
+              (list (cons "HIDROGRAMA" nil))))
+          ;; uma gravacao so: cenario com TR, sem OBSOLETO, todos os grupos
+          (OBJ:GravarCalculo contorno cenario tr grupos)
           (HYDRO:Emit "bacia.calculada"
-            (BAC:_Limpa
+            (OBJ:_Limpa
               (list
                 (cons "BACIA" contorno)
                 (cons "TALVEGUE" talv)
-                (cons "NOME" (BAC:_Val "NOME" cad))
-                (cons "AREA" (BAC:_Val "AREA" cad))
-                (cons "COMP" (BAC:_Val "COMP" cad))
-                (cons "DECL" (BAC:_Val "DECL" cad))
-                (cons "TC" (BAC:_Val "TC" cad))
+                (cons "CENARIO" cenario)
+                (cons "NOME" (OBJ:_Val "NOME" cad))
+                (cons "AREA" (OBJ:_Val "AREA" cad))
+                (cons "COMP" (OBJ:_Val "COMP" cad))
+                (cons "DECL" (OBJ:_Val "DECL" cad))
+                (cons "TC" (OBJ:_Val "TC" cad))
                 (cons "METODO" id)
                 (cons "TR" tr)
-                (cons "DUR" (BAC:_Val "DUR" vaz))
-                (cons "QP" (BAC:_Val "QP" res))
-                (cons "PE" (BAC:_Val "PE" res))
-                (cons "VOLUME" (BAC:_Val "VOLUME" res))
+                (cons "DUR" (OBJ:_Val "DUR" vaz))
+                (cons "QP" (OBJ:_Val "QP" res))
+                (cons "PE" (OBJ:_Val "PE" res))
+                (cons "VOLUME" (OBJ:_Val "VOLUME" res))
               )
             )
           )
@@ -717,9 +742,9 @@
 )
 
 ;; ENTRADA da bacia (LIG:Entrada) se ela tem montante e o plugin ligacao esta carregado
-(defun BAC:_Entrada (contorno id tr)
+(defun BAC:_Entrada (contorno cenario)
   (if (and (HYDRO:Has "ligacao") (LIG:Afluentes contorno))
-    (LIG:Entrada contorno id tr)
+    (LIG:Entrada contorno cenario)
     nil
   )
 )
@@ -733,18 +758,18 @@
 ;; QP e VOLUME passam a ser os TOTAIS no exutorio; o proprio fica em QP-PROPRIO.
 ;; Sem VOLUME nos dois lados o volume e descartado (nao seria o total).
 (defun BAC:_Compoe (res mont area tcprop / r qm)
-  (setq qm (if (BAC:_Val "QP" mont) (BAC:_Val "QP" mont) 0.0))
-  (setq r (BAC:_SetChave res "QP-PROPRIO" (BAC:_Val "QP" res)))
-  (setq r (BAC:_SetChave r "QP" (+ (BAC:_Val "QP" res) qm)))
+  (setq qm (if (OBJ:_Val "QP" mont) (OBJ:_Val "QP" mont) 0.0))
+  (setq r (OBJ:_SetChave res "QP-PROPRIO" (OBJ:_Val "QP" res)))
+  (setq r (OBJ:_SetChave r "QP" (+ (OBJ:_Val "QP" res) qm)))
   (setq r
-    (BAC:_SetChave r "VOLUME"
-      (if (and (BAC:_Val "VOLUME" res) (BAC:_Val "VOLUME" mont))
-        (+ (BAC:_Val "VOLUME" res) (BAC:_Val "VOLUME" mont))
+    (OBJ:_SetChave r "VOLUME"
+      (if (and (OBJ:_Val "VOLUME" res) (OBJ:_Val "VOLUME" mont))
+        (+ (OBJ:_Val "VOLUME" res) (OBJ:_Val "VOLUME" mont))
         nil)))
   (setq r
-    (BAC:_SetChave r "AREA-TOTAL"
-      (+ (if area area 0.0) (if (BAC:_Val "AREA" mont) (BAC:_Val "AREA" mont) 0.0))))
-  (BAC:_SetChave r "TC-PROPRIO" tcprop)
+    (OBJ:_SetChave r "AREA-TOTAL"
+      (+ (if area area 0.0) (if (OBJ:_Val "AREA" mont) (OBJ:_Val "AREA" mont) 0.0))))
+  (OBJ:_SetChave r "TC-PROPRIO" tcprop)
 )
 
 
@@ -753,17 +778,18 @@
 ;;; ------------------------------------------------------------
 ;; Texto curto de uma vazao para menus
 (defun BAC:RotuloVazao (vaz / qp)
-  (setq qp (BAC:_Val "QP" vaz))
-  (strcat (BAC:_NomeMetodo (BAC:_Val "METODO" vaz))
-          "  |  TR " (HYDRO:FmtReal (BAC:_Val "TR" vaz)) " anos"
-          "  |  dur. " (HYDRO:FmtReal (BAC:_Val "DUR" vaz)) " min"
+  (setq qp (OBJ:_Val "QP" vaz))
+  (strcat (if (OBJ:_Val "CENARIO" vaz) (strcat (OBJ:_Val "CENARIO" vaz) "  |  ") "")
+          (BAC:_NomeMetodo (OBJ:_Val "METODO" vaz))
+          "  |  TR " (HYDRO:FmtReal (OBJ:_Val "TR" vaz)) " anos"
+          "  |  dur. " (HYDRO:FmtReal (OBJ:_Val "DUR" vaz)) " min"
           (if qp (strcat "  |  Qp " (rtos qp 2 3) " m3/s") ""))
 )
 
 ;; Valor de um atributo (C, CN) para texto: o da bacia; senao o padrao do projeto
 ;; (PADROES) ou o ultimo usado, com a origem entre parenteses; senao "nao definido".
 (defun BAC:_FmtAtrib (chave atrib prefixo / v p u)
-  (setq v (BAC:_Val chave atrib))
+  (setq v (OBJ:_Val chave atrib))
   (setq p (HYDRO:Padrao prefixo chave))
   (setq u (HYDRO:Get (strcat prefixo chave) nil))
   (cond
@@ -786,16 +812,16 @@
   (setq atrib (BAC:Atrib dados))
   (append
     (list (strcat "BACIA " (BAC:_NomeExib dados h)))
-    (if (BAC:_Val "AREA" c)
-      (list (strcat "Area: " (rtos (/ (BAC:_Val "AREA" c) 10000.0) 2 3) " ha"))
+    (if (OBJ:_Val "AREA" c)
+      (list (strcat "Area: " (rtos (/ (OBJ:_Val "AREA" c) 10000.0) 2 3) " ha"))
     )
-    (if (and (BAC:_Val "COMP" c) (BAC:_Val "DECL" c))
-      (list (strcat "L = " (rtos (BAC:_Val "COMP" c) 2 1) " m   S = "
-                    (rtos (BAC:_Val "DECL" c) 2 4) " m/m"))
+    (if (and (OBJ:_Val "COMP" c) (OBJ:_Val "DECL" c))
+      (list (strcat "L = " (rtos (OBJ:_Val "COMP" c) 2 1) " m   S = "
+                    (rtos (OBJ:_Val "DECL" c) 2 4) " m/m"))
     )
-    (if (BAC:_Val "MIN" tc)
-      (list (strcat "tc = " (rtos (BAC:_Val "MIN" tc) 2 2) " min ("
-                    (BAC:_NomeTc (BAC:_Val "ORIGEM" tc)) ")"))
+    (if (OBJ:_Val "MIN" tc)
+      (list (strcat "tc = " (rtos (OBJ:_Val "MIN" tc) 2 2) " min ("
+                    (BAC:_NomeTc (OBJ:_Val "ORIGEM" tc)) ")"))
     )
     ;; sempre mostra C e CN com o valor que vale (da bacia, ou do projeto/ultimo usado)
     (list
@@ -815,42 +841,48 @@
 ;; Linhas de uma vazao calculada
 (defun BAC:LinhasVazao (vaz)
   (append
-    (list (strcat "[" (BAC:_NomeMetodo (BAC:_Val "METODO" vaz))
-                  " - TR " (HYDRO:FmtReal (BAC:_Val "TR" vaz)) " anos]"))
-    (if (BAC:_Val "PARAMS" vaz)
+    (list (strcat "[" (BAC:_NomeMetodo (OBJ:_Val "METODO" vaz))
+                  " - TR " (HYDRO:FmtReal (OBJ:_Val "TR" vaz)) " anos"
+                  (if (and (OBJ:_Val "CENARIO" vaz)
+                           (not (equal (OBJ:_Val "CENARIO" vaz)
+                                       (OBJ:CenarioPadrao (OBJ:_Val "TR" vaz)))))
+                    (strcat " - cenario " (OBJ:_Val "CENARIO" vaz))
+                    "")
+                  "]"))
+    (if (OBJ:_Val "PARAMS" vaz)
       (list
         (strcat "Parametros: "
           (HYDRO:Join
             (mapcar
               (function (lambda (p) (strcat (car p) " = " (BAC:_FmtP (cdr p)))))
-              (BAC:_Val "PARAMS" vaz))
+              (OBJ:_Val "PARAMS" vaz))
             "   ")))
     )
-    (if (BAC:_Val "I" vaz)
-      (list (strcat "i = " (rtos (BAC:_Val "I" vaz) 2 2) " mm/h"
-                    (if (BAC:_Val "P" vaz)
-                      (strcat "   P = " (rtos (BAC:_Val "P" vaz) 2 2) " mm") "")))
+    (if (OBJ:_Val "I" vaz)
+      (list (strcat "i = " (rtos (OBJ:_Val "I" vaz) 2 2) " mm/h"
+                    (if (OBJ:_Val "P" vaz)
+                      (strcat "   P = " (rtos (OBJ:_Val "P" vaz) 2 2) " mm") "")))
     )
-    (if (BAC:_Val "PE" vaz)
-      (list (strcat "Pe = " (rtos (BAC:_Val "PE" vaz) 2 2) " mm"))
+    (if (OBJ:_Val "PE" vaz)
+      (list (strcat "Pe = " (rtos (OBJ:_Val "PE" vaz) 2 2) " mm"))
     )
-    (if (BAC:_Val "QP" vaz)
-      (list (strcat "Qp = " (rtos (BAC:_Val "QP" vaz) 2 3) " m3/s"))
+    (if (OBJ:_Val "QP" vaz)
+      (list (strcat "Qp = " (rtos (OBJ:_Val "QP" vaz) 2 3) " m3/s"))
     )
-    (if (BAC:_Val "QP-PROPRIO" vaz)
-      (list (strcat "  composta: propria " (rtos (BAC:_Val "QP-PROPRIO" vaz) 2 3)
-                    " + montantes " (rtos (- (BAC:_Val "QP" vaz) (BAC:_Val "QP-PROPRIO" vaz)) 2 3)
-                    " m3/s   tc de saida = " (rtos (BAC:_Val "TC" vaz) 2 1) " min"
-                    (if (BAC:_Val "AREA-TOTAL" vaz)
-                      (strcat "   A total = " (rtos (/ (BAC:_Val "AREA-TOTAL" vaz) 10000.0) 2 3) " ha")
+    (if (OBJ:_Val "QP-PROPRIO" vaz)
+      (list (strcat "  composta: propria " (rtos (OBJ:_Val "QP-PROPRIO" vaz) 2 3)
+                    " + montantes " (rtos (- (OBJ:_Val "QP" vaz) (OBJ:_Val "QP-PROPRIO" vaz)) 2 3)
+                    " m3/s   tc de saida = " (rtos (OBJ:_Val "TC" vaz) 2 1) " min"
+                    (if (OBJ:_Val "AREA-TOTAL" vaz)
+                      (strcat "   A total = " (rtos (/ (OBJ:_Val "AREA-TOTAL" vaz) 10000.0) 2 3) " ha")
                       "")))
     )
-    (if (BAC:_Val "PRESERVADA" vaz)
+    (if (OBJ:_Val "PRESERVADA" vaz)
       (list (strcat "  vazao de entrada preservada (calculada no tc maximo: "
-                    (rtos (BAC:_Val "QP-CALC" vaz) 2 3) " m3/s)"))
+                    (rtos (OBJ:_Val "QP-CALC" vaz) 2 3) " m3/s)"))
     )
-    (if (BAC:_Val "VOLUME" vaz)
-      (list (strcat "Volume = " (rtos (BAC:_Val "VOLUME" vaz) 2 0) " m3"))
+    (if (OBJ:_Val "VOLUME" vaz)
+      (list (strcat "Volume = " (rtos (OBJ:_Val "VOLUME" vaz) 2 0) " m3"))
     )
   )
 )
@@ -874,15 +906,9 @@
 ;;; ------------------------------------------------------------
 ;;; 8. TIPO NO CATALOGO (rotulos, eventos e declaracao)
 ;;; ------------------------------------------------------------
-(HYDRO:SetLabel "HYDRO.BACIAS" "Bacias cadastradas (handles)" "")
 (HYDRO:SetLabel "HYDRO.BACIA.METODO" "Ultimo metodo chuva-vazao usado" "")
-(HYDRO:SetLabel "HYDRO.BACIA.TCMETODO" "Ultimo metodo de tc usado" "")
 (HYDRO:SetLabel "xdata:DREN-BACIA:1005" "Talvegue relacionado" "")
 (HYDRO:SetLabel "xdata:DREN-BACIA:1040" "Vazao de pico Qp" "m3/s")
-
-(defun BAC:_ObjEh (en)
-  (if (BAC:Ler en) T nil)
-)
 
 (defun BAC:_ObjNome (en)
   (BAC:_NomeExib (BAC:Ler en) (HYDRO:Handle en))
@@ -899,27 +925,22 @@
     (list "" (strcat "Hidrogramas: " (itoa (length (BAC:Hidrogramas dados))))))
 )
 
-;; resultado do metodo desta bacia, reavaliado no tc dado (capacidade "VAZAO-EM"):
-;; usa os parametros do calculo gravado para METODO e TR; nil se nao ha calculo
-(defun BAC:_ObjVazaoEm (en metodo tr tc / dados c vaz m ctx res)
+;; resultado do metodo desta bacia, reavaliado no tc dado (capacidade "VAZAO-EM",
+;; (fn en cenario tc)): usa o metodo e o INPUT do calculo gravado no cenario; nil se nao ha
+(defun BAC:_ObjVazaoEm (en cenario tc / dados vaz m ctx res)
   (setq dados (BAC:Ler en))
-  (foreach c (BAC:Vazao dados)
-    (if (and (equal (BAC:_Val "METODO" c) metodo)
-             (equal (BAC:_Val "TR" c) tr 1e-9))
-      (setq vaz c)
-    )
-  )
-  (setq m (HYDRO:RegGet "metodo-chuva-vazao" metodo))
+  (setq vaz (BAC:CalcDe dados cenario))
+  (setq m (if vaz (HYDRO:RegGet "metodo-chuva-vazao" (OBJ:_Val "METODO" vaz)) nil))
   (if (and vaz m)
     (progn
-      ;; reavalia SO esta bacia no tc dado, com os parametros do calculo dela
+      ;; reavalia SO esta bacia no tc dado, com o metodo e o INPUT do calculo dela
       (setq ctx
         (append
           (list (cons "TC" tc)
-                (cons "TR" tr)
-                (cons "DUR" (if (cdr (assoc "USA-DUR" m)) (BAC:_Val "DUR" vaz) tc)))
-          (BAC:Caract dados)))
-      (setq res (BAC:ExecutarMetodo metodo ctx (BAC:_Val "PARAMS" vaz)))
+                (cons "TR" (OBJ:_Val "TR" vaz))
+                (cons "DUR" (if (cdr (assoc "USA-DUR" m)) (OBJ:_Val "DUR" vaz) tc)))
+          (BAC:_CaractCalc dados)))
+      (setq res (BAC:ExecutarMetodo (OBJ:_Val "METODO" vaz) ctx (OBJ:_Val "PARAMS" vaz)))
       (if (assoc "ERRO" res) nil res)
     )
     nil
@@ -927,7 +948,7 @@
 )
 
 (defun BAC:_ObjArea (en)
-  (BAC:_Val "AREA" (BAC:Caract (BAC:Ler en)))
+  (OBJ:_Val "AREA" (BAC:Caract (BAC:Ler en)))
 )
 
 ;; destino padrao da bacia: o proprio talvegue
@@ -935,14 +956,6 @@
   (setq h (BAC:Talvegue (BAC:Ler en)))
   (if h (handent h) nil)
 )
-
-;; Remocao do cadastro de uma bacia: avisa o mecanismo de objetos, que
-;; desfaz as ligacoes (a bacia nao conhece os plugins de objetos/ligacao)
-(defun BAC:_ObjOnRemovida (dados)
-  (HYDRO:Emit "objeto.removido" (list (cons "OBJETO" (cdr (assoc "BACIA" dados)))))
-)
-
-(HYDRO:On "bacia.removida" "bacia" 'BAC:_ObjOnRemovida)
 
 ;; regra da bacia sobre si mesma: so bacias descarregam em bacias
 (defun BAC:_ObjRegra (tipo-origem tipo-destino)
@@ -956,20 +969,17 @@
   (OBJ:RegistrarTipo
     "bacia"
     "Bacia"
-    "Bacia hidrografica (contorno + talvegue). Cadastre com BACIACAD."
+    "Bacia hidrografica (contorno + talvegue opcional). Cadastre com BACIACAD."
     '("LWPOLYLINE" "POLYLINE" "SPLINE");aceita
-    nil;params
+    (BAC:_AtribDefs);params (ATRIB)
     T;recebe
     T;emite
     (list
-      (cons "CADASTRAVEL" nil)
-      (cons "DETECTA" 'BAC:_ObjEh)
-      (cons "ARMAZENAMENTO"
-        (list (cons "LER" 'BAC:Ler)
-              (cons "GRAVAR" 'BAC:Gravar)
-              (cons "LISTAR" 'BAC:Listar)
-              (cons "REINDEXAR" 'BAC:Reindexar)
-              (cons "REMOVER" 'BAC:Remover)))
+      (cons "CARACTERIZA" 'BAC:Caracterizar)
+      (cons "PARAMS-DEFS" (BAC:_VinculosDefs))
+      (cons "CARACT-DEFS" (BAC:_CaractDefs))
+      (cons "PADROES" 'BAC:_Padroes)
+      (cons "AO-REMOVER" 'BAC:_AoRemover)
       (cons "NOME-FN" 'BAC:_ObjNome)
       (cons "RESUMO" 'BAC:_ObjResumo)
       (cons "TOSTRING" 'BAC:ToString)
@@ -979,7 +989,6 @@
       (cons "AREA-PROPRIA" 'BAC:_ObjArea)
       (cons "DESTINO-PADRAO" 'BAC:_ObjTalvegue)
       (cons "REGRA" 'BAC:_ObjRegra)
-      (cons "EDITAR" 'BAC:EditarCadastro)
     );extras
   )
 )
@@ -992,7 +1001,8 @@
 ;; desenho fica em views/bacia_view.lsp e o dialogo em views/bacia_tabela.lsp.
 ;;
 ;; COMANDOS
-;;   BACIACAD   cadastra/atualiza a bacia (sem calcular vazao)
+;;   BACIACAD   cadastra/atualiza a bacia (fluxo generico; nao calcula nada)
+;;   BACIAEDITA altera UM campo (ATRIB, talvegue ou CARACT manual)
 ;;   BACIA      calcula a vazao por um metodo cadastrado
 ;;   BACIAS     lista as bacias do desenho (a tabela esta em BACIATABELA)
 ;;   BACIAINFO  mostra a bacia (BAC:ToString)
@@ -1003,202 +1013,6 @@
   (if (setq ss (ssget "_:S" '((0 . "LWPOLYLINE,POLYLINE,SPLINE"))))
     (ssname ss 0)
     nil
-  )
-)
-
-;; Mostra o tc pelo metodo padrao e permite aceitar, trocar de metodo ou
-;; informar um valor. Retorna (tc origem params).
-(defun BAC:_EscolheTc (caract id-padrao params-padrao /
-                       tcmin id params res tcdef op lista idx m origem tc itens pos i)
-  (setq tcmin (HYDRO:Get "HYDRO.TC.MINIMO" 10.0))
-  (setq id
-    (if (and id-padrao (BAC:_MetodoTcOk id-padrao))
-      id-padrao
-      (HYDRO:Get "HYDRO.BACIA.TCMETODO" "kirpich")
-    )
-  )
-  (setq params
-    (if (and params-padrao (equal id id-padrao))
-      params-padrao
-      (BAC:_ParamsTc id)
-    )
-  )
-  (setq res (BAC:CalcularTc id caract params))
-  (while (not origem)
-    (setq tcdef
-      (if (assoc "ERRO" res) tcmin (max (BAC:_Val "TC" res) tcmin)))
-    (if (assoc "ERRO" res)
-      (progn
-        (princ (strcat "\n[BACIA] " (BAC:_Val "ERRO" res)))
-        (setq op (if (BAC:_ListaTc) "Outro" "Informar"))
-      )
-      (progn
-        (princ
-          (strcat "\ntc (" (BAC:_NomeTc id) ") = " (rtos (BAC:_Val "TC" res) 2 2)
-                  " min;  minimo " (rtos tcmin 2 1) " min  ->  " (rtos tcdef 2 2) " min"))
-        (initget "Aceitar Outro Informar")
-        (setq op
-          (getkword "\nTempo de concentracao [Aceitar/Outro metodo/Informar valor] <Aceitar>: "))
-      )
-    )
-    (cond
-      ((equal op "Outro")
-        (setq lista (BAC:_ListaTc))
-        (if lista
-          (progn
-            (setq itens
-              (mapcar
-                (function
-                  (lambda (x)
-                    (strcat (cdr (assoc "NOME" (cdr x))) "  -  "
-                            (cdr (assoc "DESC" (cdr x))))
-                  )
-                )
-                lista
-              )
-            )
-            (setq i 0 pos 0)
-            (foreach m lista
-              (if (equal (car m) id) (setq pos i))
-              (setq i (1+ i))
-            )
-            (setq idx (HYDRO:Escolher "Metodos de tempo de concentracao:" itens pos))
-            (setq id (car (nth idx lista)))
-            (setq m (cdr (nth idx lista)))
-            (setq params
-              (HYDRO:AskParams (cdr (assoc "PARAMS" m))
-                               (strcat "HYDRO.TC." id ".") nil))
-            (setq res (BAC:CalcularTc id caract params))
-            (if (not (assoc "ERRO" res))
-              (HYDRO:Set "HYDRO.BACIA.TCMETODO" id)
-            )
-          )
-          (princ "\nNenhum outro metodo de tc cadastrado.")
-        )
-      )
-      ((equal op "Informar")
-        (setq tc (HYDRO:AskReal "tc (min)" tcdef))
-        (if (and tc (> tc 0.0))
-          (progn (setq origem "usuario") (setq params nil))
-          (princ "\ntc invalido.")
-        )
-      )
-      (T
-        (if (not (assoc "ERRO" res))
-          (progn (setq tc tcdef) (setq origem id))
-        )
-      )
-    )
-  )
-  (list tc origem params)
-)
-
-;; Pergunta o nome (Enter mantem o atual; sem nome, usa "B-<handle>")
-(defun BAC:_PedeNome (atual / r)
-  (setq r
-    (getstring T
-      (strcat "\nNome da bacia"
-              (if atual (strcat " <" atual ">") " (Enter = automatico)")
-              ": ")))
-  (if (and r (/= r "")) r atual)
-)
-
-;; Pergunta um real opcional: Enter mantem o valor da bacia (se houver)
-(defun BAC:_PedeOpcional (msg atual padrao / r)
-  (setq r
-    (getreal
-      (strcat "\n" msg " (Enter = "
-              (cond
-                (atual (strcat "manter " (rtos atual 2 3)))
-                (padrao (strcat "padrao do projeto " (rtos padrao 2 3)))
-                (T "pular"))
-              "): ")))
-  (if r r atual)
-)
-
-;; Pergunta os atributos C e CN. Enter mantem o da bacia; sem nenhum, a bacia fica
-;; sem o atributo e vale o padrao do projeto (comando PADROES) na hora de calcular.
-(defun BAC:_PedeAtrib (atrib / c cn)
-  (setq c
-    (BAC:_PedeOpcional "Coeficiente de escoamento C"
-                       (BAC:_Val "C" atrib)
-                       (HYDRO:Padrao "HYDRO.MET.racional." "C")))
-  (setq cn
-    (BAC:_PedeOpcional "Numero da curva CN"
-                       (BAC:_Val "CN" atrib)
-                       (HYDRO:Padrao "HYDRO.MET.scs-cn." "CN")))
-  (if (and c (or (<= c 0.0) (> c 1.0)))
-    (progn (princ "\nC deve estar entre 0 e 1: ignorado.") (setq c (BAC:_Val "C" atrib)))
-  )
-  (if (and cn (or (< cn 1.0) (> cn 100.0)))
-    (progn (princ "\nCN deve estar entre 1 e 100: ignorado.") (setq cn (BAC:_Val "CN" atrib)))
-  )
-  (BAC:_Limpa (list (cons "C" c) (cons "CN" cn)))
-)
-
-;; Cadastro interativo (nome, tc por metodo, C e CN). Retorna o contexto
-;; (BAC:_Ctx) ou (("ERRO" . msg)).
-(defun BAC:CadastroInterativo (contorno talvegue /
-                               dados caract old nome tcr atrib tc)
-  (setq dados (BAC:Ler contorno))
-  (setq old (BAC:Tc dados))
-  (setq caract (BAC:Caracterizar contorno talvegue))
-  (cond
-    ((assoc "ERRO" caract) caract)
-    (T
-      (princ
-        (strcat "\nArea " (rtos (/ (BAC:_Val "AREA" caract) 10000.0) 2 3) " ha;  talvegue "
-                (rtos (BAC:_Val "COMP" caract) 2 1) " m;  declividade "
-                (rtos (BAC:_Val "DECL" caract) 2 4) " m/m"))
-      (setq nome (BAC:_PedeNome (BAC:Nome dados)))
-      (setq tcr
-        (BAC:_EscolheTc caract (BAC:_Val "ORIGEM" old) (BAC:_Val "PARAMS" old)))
-      (setq atrib (BAC:_PedeAtrib (BAC:Atrib dados)))
-      (setq tc
-        (list (cons "MIN" (nth 0 tcr))
-              (cons "ORIGEM" (nth 1 tcr))
-              (cons "PARAMS" (nth 2 tcr))))
-      (BAC:Cadastrar contorno talvegue nome atrib caract tc)
-      ;; bacia NOVA: oferece ligar a outros objetos antes de seguir
-      (if (and (null dados) (HYDRO:Has "ligacao"))
-        (LIG:OferecerLigacao contorno)
-      )
-      (BAC:_Ctx (BAC:Ler contorno))
-    )
-  )
-)
-
-;; Talvegue: reaproveita o cadastrado ou pede a selecao
-(defun BAC:_SelTalvegue (dados / h op)
-  (setq h (BAC:Talvegue dados))
-  (if (and h (handent h))
-    (progn
-      (initget "Usar Trocar")
-      (setq op
-        (getkword
-          (strcat "\nTalvegue cadastrado (handle " h "). [Usar/Trocar] <Usar>: ")))
-      (if (equal op "Trocar")
-        (BAC:_SelLinha "\nSelecione a polilinha do TALVEGUE: ")
-        (handent h)
-      )
-    )
-    (BAC:_SelLinha "\nSelecione a polilinha do TALVEGUE: ")
-  )
-)
-
-;; Edita o cadastro de uma bacia ja selecionada. Retorna T ou nil.
-(defun BAC:EditarCadastro (en / dados talv cad)
-  (setq dados (BAC:Ler en))
-  (setq talv (BAC:_SelTalvegue dados))
-  (if talv
-    (progn
-      (setq cad (BAC:CadastroInterativo en talv))
-      (if (assoc "ERRO" cad)
-        (progn (alert (strcat "Erro: " (BAC:_Val "ERRO" cad))) nil)
-        T
-      )
-    )
-    (progn (princ "\nTalvegue nao selecionado.") nil)
   )
 )
 
@@ -1239,7 +1053,7 @@
 )
 
 ;; Pergunta TR, metodo, duracao e parametros. Retorna alist
-;; (TR ID DUR PARAMS) ou nil.
+;; (TR ID DUR PARAMS CENARIO) ou nil. O cenario e o TR (+ o nome dado em CENARIO).
 (defun BAC:_PerguntasCalculo (cad / tr id m dur params auto)
   (setq id (HYDRO:Get "HYDRO.BACIA.METODO" nil))
   ;; modo automatico (CALCAUTO): ultimo TR e metodo, sem perguntas
@@ -1273,8 +1087,8 @@
           (HYDRO:Set "HYDRO.BACIA.METODO" id)
           (setq dur
             (if (and (cdr (assoc "USA-DUR" m)) (not auto))
-              (HYDRO:AskReal "Duracao da chuva (min)" (BAC:_Val "TC" cad))
-              (BAC:_Val "TC" cad)
+              (HYDRO:AskReal "Duracao da chuva (min)" (OBJ:_Val "TC" cad))
+              (OBJ:_Val "TC" cad)
             )
           )
           (setq params
@@ -1289,7 +1103,8 @@
                 (BAC:_Sobrescritas cad (cdr (assoc "PARAMS" m))))
             )
           )
-          (list (cons "TR" tr) (cons "ID" id) (cons "DUR" dur) (cons "PARAMS" params))
+          (list (cons "TR" tr) (cons "ID" id) (cons "DUR" dur) (cons "PARAMS" params)
+                (cons "CENARIO" (OBJ:CenarioNome tr (OBJ:NomeCenario))))
         )
       )
     )
@@ -1299,49 +1114,47 @@
 ;; Recalcula os montantes da bacia (em ordem) antes de calcula-la. nil = ok, ou o erro.
 (defun BAC:_RecalcMontantes (contorno perg)
   (if (and (HYDRO:Has "ligacao") (LIG:Afluentes contorno))
-    (LIG:RecalcularMontantes contorno (BAC:_Val "ID" perg) (BAC:_Val "TR" perg))
+    (LIG:RecalcularMontantes contorno (OBJ:_Val "CENARIO" perg)
+                             (OBJ:_Val "ID" perg) (OBJ:_Val "TR" perg))
     nil
   )
 )
 
-;; Capacidade "RECALCULA": recalcula a bacia SEM perguntas para METODO e TR, com os
-;; parametros do ultimo calculo (ou os padroes do projeto). Retorna nil ou o erro (texto).
+;; Capacidade "RECALCULA" (fn en cenario metodo tr): recalcula a bacia SEM perguntas neste
+;; cenario, com o INPUT do ultimo calculo dele (ou os padroes do projeto). Retorna nil ou o erro (texto).
 ;; Os montantes dela ja devem ter sido recalculados (quem chama ordena).
-(defun BAC:_ObjRecalcula (en metodo tr / dados h talv cad m ant c params dur calc)
+(defun BAC:_ObjRecalcula (en cenario metodo tr / dados h talv cad m ant params dur calc)
   (setq dados (BAC:Ler en))
   (setq h (BAC:Talvegue dados))
-  (setq talv (if h (handent h) nil))
+  (setq talv (if (OBJ:_HandleOk h) (handent h) nil))   ; talvegue e opcional
   (setq m (HYDRO:RegGet "metodo-chuva-vazao" metodo))
   (cond
-    ((not (HYDRO:EntValida talv)) "Bacia sem talvegue valido (use BACIACAD).")
+    ((not dados) "Bacia nao cadastrada (use BACIACAD).")
     ((not m) (strcat "Metodo nao cadastrado: " metodo))
     (T
-      (setq cad (BAC:Obter en talv))
+      (setq cad (BAC:Preparar en))
       (if (assoc "ERRO" cad)
-        (BAC:_Val "ERRO" cad)
+        (OBJ:_Val "ERRO" cad)
         (progn
-          (foreach c (BAC:Vazao (BAC:Ler en))
-            (if (and (equal (BAC:_Val "METODO" c) metodo)
-                     (equal (BAC:_Val "TR" c) tr 1e-9))
-              (setq ant c)
-            )
-          )
+          ;; calculo anterior neste cenario (so vale se foi do mesmo metodo)
+          (setq ant (BAC:CalcDe (BAC:Ler en) cenario))
+          (if (and ant (not (equal (OBJ:_Val "METODO" ant) metodo))) (setq ant nil))
           (setq params
             (if ant
-              (BAC:_Val "PARAMS" ant)
+              (OBJ:_Val "PARAMS" ant)
               (HYDRO:ParamsPadrao
                 (cdr (assoc "PARAMS" m))
                 (strcat "HYDRO.MET." metodo ".")
                 (BAC:_Sobrescritas cad (cdr (assoc "PARAMS" m))))))
           (setq dur
-            (if (and ant (cdr (assoc "USA-DUR" m)) (BAC:_Val "DUR" ant))
-              (BAC:_Val "DUR" ant)
-              (BAC:_Val "TC" cad)))
+            (if (and ant (cdr (assoc "USA-DUR" m)) (OBJ:_Val "DUR" ant))
+              (OBJ:_Val "DUR" ant)
+              (OBJ:_Val "TC" cad)))
           (setq calc
             (BAC:_CalcularEGravar en talv cad
               (list (cons "TR" tr) (cons "ID" metodo) (cons "DUR" dur)
-                    (cons "PARAMS" params))))
-          (if (assoc "ERRO" calc) (BAC:_Val "ERRO" calc) nil)
+                    (cons "PARAMS" params) (cons "CENARIO" cenario))))
+          (if (assoc "ERRO" calc) (OBJ:_Val "ERRO" calc) nil)
         )
       )
     )
@@ -1350,7 +1163,9 @@
 
 ;; Fluxo completo: contorno, talvegue, cadastro (se preciso), perguntas e
 ;; calculo. Retorna (contorno . calculo) ou nil.
-(defun BAC:_FluxoCalculo (/ contorno dados talv cad perg calc erro)
+;; Fluxo completo: contorno, cadastro (se preciso, o generico), preparo (tc), perguntas
+;; e calculo. Retorna (contorno . calculo) ou nil.
+(defun BAC:_FluxoCalculo (/ contorno dados talv cad perg calc erro h)
   (setq contorno (BAC:_SelLinha "\nSelecione a polilinha do CONTORNO da bacia: "))
   (cond
     ((not contorno) nil)
@@ -1359,34 +1174,34 @@
         (princ "\nAviso: o contorno nao esta fechado; a area sera a da figura fechada pela corda.")
       )
       (setq dados (BAC:Ler contorno))
-      (setq talv (BAC:_SelTalvegue dados))
+      (if (not dados)
+        (progn
+          (OBJ:CadastroInterativoTipo contorno "bacia")
+          (setq dados (BAC:Ler contorno))
+        )
+      )
       (cond
-        ((not talv) (princ "\nTalvegue nao selecionado.") nil)
+        ((not dados) (princ "\nBacia nao cadastrada.") nil)
         ((not (HYDRO:RegList "metodo-chuva-vazao"))
           (alert "Nenhum metodo chuva-vazao cadastrado (plugin 'metodos-chuva-vazao').")
           nil
         )
         (T
-          ;; sem cadastro (ou talvegue trocado): cadastra com perguntas;
-          ;; com cadastro: reutiliza (e atualiza se a geometria mudou)
-          (setq cad
-            (if (or (not dados)
-                    (not (equal (BAC:Talvegue dados) (HYDRO:Handle talv))))
-              (BAC:CadastroInterativo contorno talv)
-              (BAC:Obter contorno talv)
-            )
-          )
+          (setq cad (BAC:Preparar contorno))
           (cond
             ((assoc "ERRO" cad)
-              (alert (strcat "Erro: " (BAC:_Val "ERRO" cad)))
+              (alert (strcat "Erro: " (OBJ:_Val "ERRO" cad)))
               nil
             )
             (T
+              (setq h (BAC:Talvegue (BAC:Ler contorno)))
+              (setq talv (if (OBJ:_HandleOk h) (handent h) nil))
               (princ
-                (strcat "\nUsando tc = " (rtos (BAC:_Val "TC" cad) 2 2) " min ("
-                        (BAC:_NomeTc (BAC:_Val "TC-ORIGEM" cad))
-                        "). Para alterar: BACIACAD."))
+                (strcat "\nUsando tc = " (rtos (OBJ:_Val "TC" cad) 2 2) " min ("
+                        (BAC:_NomeTc (OBJ:_Val "TC-ORIGEM" cad))
+                        "). Para alterar: BACIAEDITA."))
               (setq perg (BAC:_PerguntasCalculo cad))
+              (if perg (princ (strcat "\nCenario: " (OBJ:_Val "CENARIO" perg))))
               (if perg
                 (progn
                   ;; montantes recalculados antes, em ordem, sem o usuario precisar
@@ -1397,7 +1212,7 @@
                       (BAC:_CalcularEGravar contorno talv cad perg)))
                   (cond
                     ((assoc "ERRO" calc)
-                      (alert (strcat "Erro: " (BAC:_Val "ERRO" calc)))
+                      (alert (strcat "Erro: " (OBJ:_Val "ERRO" calc)))
                       nil
                     )
                     (T (cons contorno calc))
@@ -1420,16 +1235,6 @@
     "\n")
 )
 
-(defun c:BACIACAD (/ contorno)
-  (setq contorno (BAC:_SelLinha "\nSelecione a polilinha do CONTORNO da bacia: "))
-  (if contorno
-    (if (BAC:EditarCadastro contorno)
-      (alert (BAC:ToString contorno))
-    )
-  )
-  (princ)
-)
-
 ;; Mostra o resumo: alert, ou so a linha de comando no modo automatico (CALCAUTO)
 (defun BAC:_Mostra (texto)
   (if (HYDRO:CalcAuto)
@@ -1437,6 +1242,22 @@
     (alert texto)
   )
 )
+
+;; Comandos padrao do objeto (docs/arquitetura.md secao 18b): os fluxos sao os genericos
+;; de views/objetos_padrao_view.lsp; aqui so se diz de que tipo e.
+(defun BAC:_Padrao (fn)
+  (if (HYDRO:Has "objetos-padrao-view")
+    (apply fn (list "bacia"))
+    (alert "Comandos de objeto indisponiveis: carregue objetos_padrao e a view dele.")
+  )
+  (princ)
+)
+
+(defun c:BACIACAD ()   (BAC:_Padrao 'OPV:Cadastrar))
+(defun c:BACIAEDITA () (BAC:_Padrao 'OPV:EditaCampo))
+(defun c:BACIAS ()     (BAC:_Padrao 'OPV:Listar))
+(defun c:BACIAINFO ()  (BAC:_Padrao 'OPV:Info))
+(defun c:BACIAZOOM ()  (BAC:_Padrao 'OPV:Zoom))
 
 (defun c:BACIA (/ r)
   (setq r (BAC:_FluxoCalculo))
@@ -1471,47 +1292,6 @@
     )
     (T en)
   )
-)
-
-(defun c:BACIAS (/ lista en dados)
-  (setq lista (BAC:Listar))
-  (if lista
-    (progn
-      (princ "\n=== BACIAS DO DESENHO ===")
-      (princ "\nnome   handle   area(ha)   tc(min)   calculos   hidrogramas   Qp max (m3/s)")
-      (foreach en lista
-        (setq dados (BAC:Ler en))
-        (princ
-          (strcat "\n" (BAC:_NomeExib dados (HYDRO:Handle en))
-                  "   " (HYDRO:Handle en)
-                  "   " (rtos (/ (BAC:_Val "AREA" (BAC:Caract dados)) 10000.0) 2 3)
-                  "   " (rtos (BAC:_Val "MIN" (BAC:Tc dados)) 2 1)
-                  "   " (itoa (length (BAC:Vazao dados)))
-                  "   " (itoa (length (BAC:Hidrogramas dados)))
-                  "   " (rtos (BAC:_MaxQp dados) 2 3))
-        )
-      )
-      (princ "\n(Tabela completa: BACIATABELA)")
-    )
-    (princ "\nNenhuma bacia cadastrada neste desenho (use BACIACAD).")
-  )
-  (princ)
-)
-
-(defun c:BACIAINFO (/ en)
-  (setq en (BAC:_SelBaciaCad))
-  (if en (alert (BAC:ToString en)))
-  (princ)
-)
-
-;; Encontra uma bacia por nome ou handle, da zoom e a seleciona (fluxo padrao
-;; de views/objetos_padrao_view.lsp)
-(defun c:BACIAZOOM ()
-  (if (HYDRO:Has "objetos-padrao-view")
-    (OPV:Zoom "bacia")
-    (alert "BACIAZOOM indisponivel: carregue objetos_padrao e a view dele.")
-  )
-  (princ)
 )
 
 (HYDRO:Provide "bacia" "3.0")

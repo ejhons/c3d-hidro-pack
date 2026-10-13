@@ -117,11 +117,11 @@ A ordem importa no VLX, porque tudo é executado em sequência na carga:
 3. `Contents/plugins/persistence.lsp`
 4. `Contents/plugins/relacao.lsp`
 5. `Contents/plugins/idf.lsp`, `precipitacao.lsp` e `superficie.lsp`
-6. `Contents/plugins/secao.lsp` e `sarjetas.lsp`
+6. `Contents/plugins/secao.lsp`, `secao_tubo.lsp`, `tipo_estrutura.lsp` e `sarjetas.lsp` (e, em `plugins/registry/`, depois de `tempo_conc`: `captacao`, `estrutura_passagem`, `estrutura_boca_lobo`, `dissipacao`, `dissipacao_usbr`, `dissipacao_enrocamento`, `estrutura_dissipador`, `escada_siscooh`)
 7. `Contents/plugins/hidrograma.lsp`, `objetos.lsp`, `ligacao.lsp`, `objetos_padrao.lsp`, `auditoria.lsp` e `etiqueta.lsp`
-8. `Contents/plugins/models/` (`bacia`, `sarjeta`, `objetos_tipos`; depois de `objetos`)
+8. `Contents/plugins/models/` (`bacia`, `sarjeta`, `tubo`, `escada`, `estrutura`, `objetos_tipos`; depois de `objetos`)
 9. `Contents/plugins/registry/` (`metodos_chuva_vazao`, `tempo_conc`, `hidrograma_tipos`, `hietograma_tipos`)
-10. `Contents/views/idf_view.lsp`, `secao_view.lsp`, `bacia_view.lsp`, `bacia_tabela.lsp`, `hidrograma_view.lsp`, `objetos_tabela.lsp`, `objetos_padrao_view.lsp`, `auditoria_view.lsp`, `padroes_view.lsp`, `etiqueta_view.lsp`, `viewer.lsp`, `painel.lsp`, `painel_acoes.lsp`, `menu.lsp`, `toolbar.lsp` (nessa ordem, depois de todos os plugins; ver `HYDRO:Manifest`)
+10. `Contents/views/idf_view.lsp`, `secao_view.lsp`, `secao_tubo_view.lsp`, `tipo_estrutura_view.lsp`, `bacia_view.lsp`, `bacia_tabela.lsp`, `hidrograma_view.lsp`, `objetos_tabela.lsp`, `ligacao_visual_view.lsp`, `objetos_padrao_view.lsp`, `auditoria_view.lsp`, `padroes_view.lsp`, `etiqueta_view.lsp`, `viewer.lsp`, `painel.lsp`, `painel_acoes.lsp`, `menu.lsp`, `toolbar.lsp` (nessa ordem, depois de todos os plugins; ver `HYDRO:Manifest`)
 11. `Contents/hydro.lsp` — **por último** (localiza a raiz para achar DCL/SLD)
 
 Novos plugins entram **antes** do `hydro.lsp`.

@@ -10,7 +10,7 @@
 ;;; ============================================================
 (vl-load-com)
 
-(defun c:ETIQUETA (/ sel en id op modelo padrao pt novo)
+(defun c:ETIQUETA (/ sel en id op modelo padrao pt novo cen)
   (setq sel (entsel "\nSelecione o objeto a etiquetar: "))
   (setq en (if sel (car sel) nil))
   (cond
@@ -25,18 +25,23 @@
         (progn
           (setq padrao (ETQ:ModeloPadrao id))
           (princ (strcat "\nModelo padrao: " padrao))
-          (princ "\nCampos: {NOME} {TIPO} {AREA} {C} {CN} {COMP} {DECL} {QP} {TR} {TC} {E.QP} {E.TC} {H.LAMINA}...  \\P = nova linha")
+          (princ "\nCampos: {NOME} {TIPO} {AREA} {C} {CN} {COMP} {DECL} {QP} {TR} {TC} {CENARIO} {GRUPO.CAMPO} ({VAZAO.VALOR}, {ENTRADA.TC}, {ALTURA_LAMINA}...)  \\P = nova linha")
           (setq modelo (getstring T "\nModelo (Enter = padrao): "))
           (if (or (not modelo) (equal modelo "")) (setq modelo padrao))
         )
         (setq modelo nil)
       )
+      (setq cen
+        (getstring T
+          (strcat "\nCenario da etiqueta (Enter = segue o cenario em uso"
+                  (if (OBJ:CenarioAtual) (strcat ", agora " (OBJ:CenarioAtual)) "") "): ")))
+      (if (equal cen "") (setq cen nil))
       (setq pt (getpoint "\nPonto de insercao da etiqueta: "))
       (if pt
         (progn
           (setq novo
             (ETQ:CriaEtiqueta en pt (if (equal op "Modelo") "MODELO" "FIXO") modelo
-                              (HYDRO:Get "HYDRO.TEXT.HEIGHT" 1.8)))
+                              (HYDRO:Get "HYDRO.TEXT.HEIGHT" 1.8) cen))
           (princ
             (if novo
               "\nEtiqueta criada. Ela se atualiza sozinha quando o objeto e calculado ou ligado."
@@ -48,7 +53,7 @@
   (princ)
 )
 
-(defun c:ETIQUETAEDITA (/ sel lab reg alvo en id op fixo atual modelo)
+(defun c:ETIQUETAEDITA (/ sel lab reg alvo en id op fixo atual modelo cen)
   (setq sel (entsel "\nSelecione a etiqueta do Hydro: "))
   (setq lab (if sel (car sel) nil))
   (setq reg (if lab (HYDRO:DadoLer lab "HYDRO-ETQ") nil))
@@ -82,12 +87,22 @@
         )
         (setq modelo nil)
       )
+      ;; cenario fixado: Enter mantem o atual da etiqueta; "-" volta a seguir o cenario em uso
+      (setq cen (cdr (assoc "CENARIO" reg)))
+      (setq atual
+        (getstring T
+          (strcat "\nCenario da etiqueta <" (if cen cen "segue o em uso") "> (Enter = manter, - = seguir o em uso): ")))
+      (cond
+        ((equal atual "-") (setq cen nil))
+        ((and atual (/= atual "")) (setq cen atual))
+      )
       (HYDRO:DadoGravar lab "HYDRO-ETQ"
         (OBJ:_Limpa
           (list (cons "VERSAO" 1)
                 (cons "ALVO" alvo)
                 (cons "MODO" (if (equal op "Modelo") "MODELO" "FIXO"))
-                (cons "MODELO" modelo))))
+                (cons "MODELO" modelo)
+                (cons "CENARIO" cen))))
       (if (ETQ:Atualiza lab)
         (princ "\nEtiqueta atualizada.")
         (princ "\nO objeto desta etiqueta nao existe mais (rode HYDROAUDIT).")

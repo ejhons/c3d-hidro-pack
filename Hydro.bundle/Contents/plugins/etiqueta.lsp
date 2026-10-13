@@ -9,22 +9,28 @@
 ;;;      MODO "FIXO"    relatorio do objeto (o mesmo texto de OBJ:Resumo)
 ;;;      MODO "MODELO"  texto com campos {CAMPO}, editavel por etiqueta
 ;;;    Campos (sem diferenciar maiusculas; "?" se o campo nao existe):
-;;;      {NOME} {TIPO} {HANDLE}
+;;;      {NOME} {TIPO} {HANDLE} {CENARIO}
 ;;;      {AREA}            area em ha (CARACT)
-;;;      {C} {CN} {N}...   qualquer chave de ATRIB; depois qualquer chave de CARACT
-;;;                        ({COMP} {DECL} {DESNIVEL}); depois do ULTIMO calculo
-;;;                        (grupo VAZAO = saida): {QP} {TR} {TC} {METODO} {QP-PROPRIO}
-;;;      {TCP}             tc proprio da bacia (min)
-;;;      {E.QP} {E.TC}     ENTRADA (o que veio dos montantes), ultimo calculo
-;;;      {H.LAMINA} {H.VELOCIDADE} {H.PERCURSO}   HIDRAULICA do ultimo calculo
+;;;      {C} {CN} {N}...   qualquer chave de ATRIB; depois de CARACT ({COMP} {DECL} {DESNIVEL});
+;;;                        depois dos campos do CENARIO (grupos VAZAO e PRECIPITACAO: {QP-PROPRIO}
+;;;                        {I} {P} {PE}; e o INPUT da vazao)
+;;;      {GRUPO.CAMPO}     qualquer campo de qualquer grupo do cenario: {VAZAO.VALOR} {TC.METODO}
+;;;                        {ALTURA_LAMINA.VALOR}; {GRUPO} sozinho = {GRUPO.VALOR}
+;;;      atalhos:          {QP}=VAZAO.VALOR {TC}=VAZAO.TC (tc de saida) {TCP}=TC.VALOR (tc proprio)
+;;;                        {TR}=CENARIO.TR {METODO}=VAZAO.METODO {E.QP}=ENTRADA.VALOR {E.TC}
+;;;                        {H.LAMINA}=ALTURA_LAMINA {H.VELOCIDADE} {H.LARGURA} {H.PERCURSO}
+;;;    CENARIO: a etiqueta pode fixar um cenario (HYDRO-ETQ "CENARIO"); sem ele, segue o cenario em
+;;;    uso (OBJ:CenarioAtual) e, se o objeto nao o tem, o ultimo cenario calculado. Resultado
+;;;    desatualizado (OBSOLETO) acrescenta "(resultado desatualizado)" ao texto.
 ;;;    \P quebra a linha. Modelo padrao por tipo: HYDRO.ETIQUETA.MODELO.<tipo>.
 ;;;
 ;;; 2) TABELA VIVA = um objeto TABLE na camada HYDRO-TABELA (chave "HYDRO-TBL") com
-;;;    todos os objetos cadastrados: nome, tipo, A, L, S, atributos, TR, Q entrada,
-;;;    Q saida, tc e destino. As linhas sao refeitas a cada atualizacao.
+;;;    todos os objetos cadastrados: nome, tipo, A, L, S, atributos, cenario, Q entrada,
+;;;    Q saida (com "*" se desatualizado), tc e destino. As linhas sao refeitas a cada atualizacao.
 ;;;
-;;; ATUALIZACAO: assina os eventos "bacia.calculada", "objeto.calculado",
-;;; "bacia.cadastrada", "objeto.cadastrado", "ligacao.criada" e "ligacao.removida".
+;;; ATUALIZACAO: assina "bacia.calculada", "objeto.calculado", "objeto.cadastrado", "ligacao.criada" e
+;;; "ligacao.removida" (etiquetas do objeto e tabelas); "objeto.obsoleto" (so as etiquetas do objeto) e
+;;; "objetos.obsoletos" (so as tabelas, uma vez por edicao: evita refazer a tabela a cada objeto da cadeia).
 ;;; Mostra o que esta GRAVADO: mover a geometria sem recalcular nao muda o resultado.
 ;;; Comandos e perguntas: views/etiqueta_view.lsp.
 ;;; Auditoria: "etiquetas" (etiqueta cujo objeto nao existe mais; corrige apagando-a).
@@ -79,8 +85,35 @@
   )
 )
 
-(defun ETQ:_Ultimo (en grupo)
-  (last (OBJ:GrupoDe en grupo))
+;; (puro) cenario a usar para `result`: o `pref` (da etiqueta) se o objeto o tem; senao o cenario em
+;; uso (OBJ:CenarioAtual) se o objeto o tem; senao o ultimo cenario do objeto; nil se sem resultado
+(defun ETQ:_CenarioR (result pref / atual)
+  (setq atual (OBJ:CenarioAtual))
+  (cond
+    ((null result) nil)
+    ((and pref (assoc pref result)) pref)
+    ((and atual (assoc atual result)) atual)
+    (T (car (last result)))
+  )
+)
+
+;; (puro) campo `spec` = "GRUPO" ou "GRUPO.CAMPO" dos grupos do cenario (sem diferenciar maiusculas);
+;; "E" vale ENTRADA; sem campo, VALOR. nil se nao existe.
+(defun ETQ:_GC (grupos spec / j g campo)
+  (setq j (vl-string-search "." spec))
+  (setq g (if j (substr spec 1 j) spec))
+  (setq campo (if j (substr spec (+ j 2)) "VALOR"))
+  (if (equal (strcase g) "E") (setq g "ENTRADA"))
+  (setq g (ETQ:_CI g grupos))
+  (if g (cdr (ETQ:_CI campo (cdr g))) nil)
+)
+
+;; atalhos (campos antigos) -> GRUPO.CAMPO
+(defun ETQ:_Aliases ()
+  '(("QP" . "VAZAO.VALOR") ("TC" . "VAZAO.TC") ("TCP" . "TC.VALOR") ("TR" . "CENARIO.TR")
+    ("METODO" . "VAZAO.METODO") ("H.LAMINA" . "ALTURA_LAMINA.VALOR")
+    ("H.LARGURA" . "LARGURA_INUNDADA.VALOR") ("H.VELOCIDADE" . "VELOCIDADE.VALOR")
+    ("H.PERCURSO" . "PERCURSO.VALOR") ("H.AREA_MOLHADA" . "AREA_MOLHADA.VALOR"))
 )
 
 ;; Valor padrao do projeto (PADROES) de um parametro: primeiro nos ATRIB do tipo do
@@ -106,38 +139,55 @@
   out
 )
 
-;; valor (string) de um campo do modelo para o objeto en, ou nil
-(defun ETQ:Campo (en nome / up c par)
+;; (puro, dado o registro) valor (string) de um campo do modelo, ou nil. `en` so e usado para
+;; HANDLE, nome automatico e padrao do projeto (pode ser nil em testes).
+(defun ETQ:_CampoR (en reg nome pref / up res cen grupos c atrib alias par g v)
   (setq up (strcase nome))
-  (setq c (OBJ:CaractDe en))
+  (setq res (OBJ:_Val "RESULT" reg))
+  (setq cen (ETQ:_CenarioR res pref))
+  (setq grupos (if cen (cdr (assoc cen res)) nil))
+  (setq c (OBJ:_Val "CARACT" reg))
+  (setq atrib (OBJ:_Val "ATRIB" reg))
+  (setq alias (cdr (assoc up (ETQ:_Aliases))))
   (cond
-    ((equal up "NOME") (OBJ:Nome en))
-    ((equal up "TIPO") (OBJ:_NomeTipo (OBJ:TipoDe en)))
-    ((equal up "HANDLE") (HYDRO:Handle en))
+    ((equal up "NOME") (if (OBJ:_Val "NOME" reg) (OBJ:_Val "NOME" reg) (OBJ:Nome en)))
+    ((equal up "TIPO") (OBJ:_NomeTipo (OBJ:_Val "TIPO" reg)))
+    ((equal up "HANDLE") (if en (HYDRO:Handle en) nil))
+    ((equal up "CENARIO") cen)
     ((equal up "AREA")
       (if (cdr (assoc "AREA" c)) (rtos (/ (cdr (assoc "AREA" c)) 10000.0) 2 3) nil))
-    ((equal up "TCP") (ETQ:_Fmt (OBJ:_Val "MIN" (OBJ:GrupoDe en "TC"))))
-    ((equal (substr up 1 2) "E.")
-      (ETQ:_Fmt (cdr (ETQ:_CI (substr nome 3) (ETQ:_Ultimo en "ENTRADA")))))
-    ((equal (substr up 1 2) "H.")
-      (ETQ:_Fmt (cdr (ETQ:_CI (substr nome 3) (ETQ:_Ultimo en "HIDRAULICA")))))
+    (alias
+      (setq v (ETQ:_GC grupos alias))
+      ;; sem VAZAO ainda, o tc e o proprio
+      (if (and (null v) (equal up "TC")) (setq v (ETQ:_GC grupos "TC.VALOR")))
+      (ETQ:_Fmt v)
+    )
+    ((vl-string-search "." nome) (ETQ:_Fmt (ETQ:_GC grupos nome)))
     (T
-      (setq par (ETQ:_CI nome (OBJ:AtribDe en)))
+      (setq par (ETQ:_CI nome atrib))
       (if (not par) (setq par (ETQ:_CI nome c)))
-      (if (not par) (setq par (ETQ:_CI nome (ETQ:_Ultimo en "VAZAO"))))
-      ;; parametros USADOS no ultimo calculo (C, CN... vindos do padrao do projeto)
+      ;; campos do cenario: vazao, precipitacao e o INPUT usado (C, CN... do padrao do projeto)
+      (if (not par) (setq par (ETQ:_CI nome (cdr (assoc "VAZAO" grupos)))))
+      (if (not par) (setq par (ETQ:_CI nome (cdr (assoc "PRECIPITACAO" grupos)))))
       (if (not par)
-        (setq par (ETQ:_CI nome (cdr (assoc "PARAMS" (ETQ:_Ultimo en "VAZAO"))))))
+        (setq par (ETQ:_CI nome (OBJ:_Val "INPUT" (cdr (assoc "VAZAO" grupos))))))
+      ;; {GRUPO} sozinho = o VALOR dele
       (if (not par)
-        (setq par (ETQ:_CI nome (cdr (assoc "PARAMS" (ETQ:_Ultimo en "HIDRAULICA"))))))
-      ;; ainda sem calculo: o valor que VALERIA (padrao do projeto)
-      (if (not par) (setq par (ETQ:_PadraoDe en nome)))
-      (if (and (not par) (equal up "TC"))
-        (setq par (cons "TC" (OBJ:_Val "MIN" (OBJ:GrupoDe en "TC"))))
+        (progn
+          (setq g (ETQ:_CI nome grupos))
+          (if g (setq par (cons nome (OBJ:_Val "VALOR" (cdr g)))))
+        )
       )
+      ;; ainda sem calculo: o valor que VALERIA (padrao do projeto)
+      (if (and (not par) en) (setq par (ETQ:_PadraoDe en nome)))
       (if par (ETQ:_Fmt (cdr par)) nil)
     )
   )
+)
+
+;; valor (string) de um campo do modelo para o objeto en, ou nil. pref = cenario fixado (ou nil)
+(defun ETQ:Campo (en nome pref)
+  (ETQ:_CampoR en (OBJ:Registro en) nome pref)
 )
 
 ;; modelo padrao do tipo: o configurado (HYDRO.ETIQUETA.MODELO.<tipo>) ou o de fabrica
@@ -146,18 +196,27 @@
   (cond
     (cfg cfg)
     ((equal id "bacia")
-      "{NOME}\\PA = {AREA} ha   tc = {TC} min\\PC = {C}   CN = {CN}\\PQp = {QP} m3/s  (TR {TR})")
+      "{NOME}\\PA = {AREA} ha   tc = {TC} min\\PC = {C}   CN = {CN}\\PQp = {QP} m3/s  ({CENARIO})")
     (T
-      "{NOME}\\PQ = {E.QP} m3/s   tc = {E.TC} min\\PLamina = {H.LAMINA} m   V = {H.VELOCIDADE} m/s")
+      "{NOME}\\PQ = {ENTRADA.VALOR} m3/s   tc = {ENTRADA.TC} min\\PLamina = {ALTURA_LAMINA} m   V = {VELOCIDADE} m/s")
   )
 )
 
-;; texto de uma etiqueta: relatorio (FIXO) ou modelo preenchido
-(defun ETQ:TextoDe (en modo modelo)
-  (if (equal modo "FIXO")
-    (HYDRO:Join (OBJ:Resumo en) "\\P")
-    (ETQ:Substitui (if modelo modelo (ETQ:ModeloPadrao (OBJ:TipoDe en)))
-                   (function (lambda (n) (ETQ:Campo en n))))
+;; texto de uma etiqueta: relatorio (FIXO) ou modelo preenchido; pref = cenario fixado ou nil
+;; (o registro do objeto e lido UMA vez por etiqueta)
+(defun ETQ:TextoDe (en modo modelo pref / reg cen txt)
+  (setq reg (OBJ:Registro en))
+  (setq cen (ETQ:_CenarioR (OBJ:_Val "RESULT" reg) pref))
+  (setq txt
+    (if (equal modo "FIXO")
+      (HYDRO:Join (OBJ:Resumo en) "\\P")
+      (ETQ:Substitui (if modelo modelo (ETQ:ModeloPadrao (OBJ:_Val "TIPO" reg)))
+                     (function (lambda (n) (ETQ:_CampoR en reg n pref))))
+    )
+  )
+  (if (and cen (OBJ:_ObsoletoR (OBJ:_Val "RESULT" reg) cen))
+    (strcat txt "\\P(resultado desatualizado)")
+    txt
   )
 )
 
@@ -200,9 +259,10 @@
   (ETQ:_Procura "MTEXT" "HYDRO-ETIQUETA" "HYDRO-ETQ")
 )
 
-;; Cria a etiqueta do objeto `alvo` em pt (UCS). modo "FIXO" ou "MODELO".
+;; Cria a etiqueta do objeto `alvo` em pt (UCS). modo "FIXO" ou "MODELO". cenario = nome fixado
+;; (ou nil: segue o cenario em uso).
 ;; Retorna o ename ou nil.
-(defun ETQ:CriaEtiqueta (alvo pt modo modelo altura / en)
+(defun ETQ:CriaEtiqueta (alvo pt modo modelo altura cenario / en)
   (ETQ:_Camada "HYDRO-ETIQUETA" 3)
   (setq en (HYDRO:Mtext pt "." altura 0.0))
   (if en
@@ -213,7 +273,8 @@
           (list (cons "VERSAO" 1)
                 (cons "ALVO" (HYDRO:Handle alvo))
                 (cons "MODO" modo)
-                (cons "MODELO" modelo))))
+                (cons "MODELO" modelo)
+                (cons "CENARIO" cenario))))
       (ETQ:Atualiza en)
       en
     )
@@ -229,7 +290,8 @@
   (setq en (if alvo (handent alvo) nil))
   (if (and reg en (HYDRO:EntValida en) (HYDRO:EntValida lab) (OBJ:TipoDe en))
     (progn
-      (setq txt (ETQ:TextoDe en (cdr (assoc "MODO" reg)) (cdr (assoc "MODELO" reg))))
+      (setq txt (ETQ:TextoDe en (cdr (assoc "MODO" reg)) (cdr (assoc "MODELO" reg))
+                         (cdr (assoc "CENARIO" reg))))
       (setq obj (vlax-ename->vla-object lab))
       (setq atual (vl-catch-all-apply 'vla-get-textstring (list obj)))
       (if (and (not (vl-catch-all-error-p atual)) (not (equal atual txt)))
@@ -258,7 +320,7 @@
 ;;; TABELA VIVA
 ;;; ------------------------------------------------------------
 (defun ETQ:Cabecalho ()
-  '("Nome" "Tipo" "A (ha)" "L (m)" "S (m/m)" "Atributos" "TR (anos)"
+  '("Nome" "Tipo" "A (ha)" "L (m)" "S (m/m)" "Atributos" "Cenario"
     "Q entrada (m3/s)" "Q saida (m3/s)" "tc (min)" "Destino")
 )
 
@@ -267,22 +329,29 @@
 )
 
 ;; linha da tabela (lista de strings, uma por coluna) para o objeto
-(defun ETQ:LinhaTabela (en / dest atr p)
+(defun ETQ:LinhaTabela (en / reg dest atr p obs)
+  (setq reg (OBJ:Registro en))
   (setq dest (if (HYDRO:Has "ligacao") (LIG:Destino en) nil))
-  (foreach p (OBJ:AtribDe en)
+  (foreach p (OBJ:_Val "ATRIB" reg)
     (setq atr (append atr (list (strcat (car p) "=" (ETQ:_Fmt (cdr p))))))
   )
+  (setq obs
+    (OBJ:_ObsoletoR (OBJ:_Val "RESULT" reg)
+                    (ETQ:_CenarioR (OBJ:_Val "RESULT" reg) nil)))
   (list
     (OBJ:Nome en)
-    (OBJ:_NomeTipo (OBJ:TipoDe en))
-    (ETQ:_S (ETQ:Campo en "AREA"))
-    (ETQ:_S (ETQ:Campo en "COMP"))
-    (ETQ:_S (ETQ:Campo en "DECL"))
+    (OBJ:_NomeTipo (OBJ:_Val "TIPO" reg))
+    (ETQ:_S (ETQ:_CampoR en reg "AREA" nil))
+    (ETQ:_S (ETQ:_CampoR en reg "COMP" nil))
+    (ETQ:_S (ETQ:_CampoR en reg "DECL" nil))
     (if atr (HYDRO:Join atr " ") "-")
-    (ETQ:_S (ETQ:Campo en "TR"))
-    (ETQ:_S (ETQ:Campo en "E.QP"))
-    (ETQ:_S (ETQ:Campo en "QP"))
-    (ETQ:_S (ETQ:Campo en "TC"))
+    (ETQ:_S (ETQ:_CampoR en reg "CENARIO" nil))
+    (ETQ:_S (ETQ:_CampoR en reg "E.QP" nil))
+    (ETQ:_S
+      (if (ETQ:_CampoR en reg "QP" nil)
+        (strcat (ETQ:_CampoR en reg "QP" nil) (if obs "*" ""))
+        nil))
+    (ETQ:_S (ETQ:_CampoR en reg "TC" nil))
     (if dest (OBJ:Nome dest) "-")
   )
 )
@@ -318,7 +387,7 @@
         ((> rows need)
           (vl-catch-all-apply 'vla-deleterows (list obj 2 (- rows need))))
       )
-      (ETQ:_Cel obj 0 0 "Objetos Hydro")
+      (ETQ:_Cel obj 0 0 "Objetos Hydro  (* = resultado desatualizado)")
       (setq c 0)
       (foreach cab (ETQ:Cabecalho)
         (ETQ:_Cel obj 1 c cab)
@@ -410,9 +479,24 @@
   (vl-catch-all-apply 'ETQ:_Reage (list dados))
 )
 
+;; objeto marcado como desatualizado: so as etiquetas dele; as tabelas, uma vez, em "objetos.obsoletos"
+(defun ETQ:_OnObsoleto (dados / en)
+  (setq en (cdr (assoc "OBJETO" dados)))
+  (if (and en (= (type en) 'ENAME) (HYDRO:EntValida en))
+    (vl-catch-all-apply 'ETQ:AtualizaDe (list en))
+  )
+)
+
+(defun ETQ:_OnObsoletos (dados / tb)
+  (foreach tb (ETQ:Tabelas)
+    (vl-catch-all-apply 'ETQ:AtualizaTabela (list tb))
+  )
+)
+
+(HYDRO:On "objeto.obsoleto" "etiqueta" 'ETQ:_OnObsoleto)
+(HYDRO:On "objetos.obsoletos" "etiqueta" 'ETQ:_OnObsoletos)
 (HYDRO:On "bacia.calculada" "etiqueta" 'ETQ:_OnEvento)
 (HYDRO:On "objeto.calculado" "etiqueta" 'ETQ:_OnEvento)
-(HYDRO:On "bacia.cadastrada" "etiqueta" 'ETQ:_OnEvento)
 (HYDRO:On "objeto.cadastrado" "etiqueta" 'ETQ:_OnEvento)
 (HYDRO:On "ligacao.criada" "etiqueta" 'ETQ:_OnEvento)
 (HYDRO:On "ligacao.removida" "etiqueta" 'ETQ:_OnEvento)

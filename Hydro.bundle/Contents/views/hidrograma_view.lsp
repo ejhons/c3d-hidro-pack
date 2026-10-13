@@ -219,7 +219,7 @@
         (getkword
           (strcat "\nExcluir o hidrograma [" (HID:RotuloHid h) "]? [Sim/Nao] <Nao>: ")))
       (if (equal r "Sim")
-        (BAC:Gravar en (BAC:_SetResult dados "HIDROGRAMAS" (vl-remove h hids)))
+        (OBJ:GravarResultado en (cdr (assoc "CENARIO" h)) "HIDROGRAMA" nil)
       )
     )
   )
@@ -310,18 +310,7 @@
   out
 )
 
-(defun HID:_IdxTipoPadrao (tipos / ult i pos item)
-  (setq ult (HYDRO:Get "HYDRO.HID.TIPO" nil))
-  (setq i 0 pos 0)
-  (foreach item tipos
-    (if (equal (car item) ult) (setq pos i))
-    (setq i (1+ i))
-  )
-  pos
-)
-
-(defun c:HIDROGRAMA (/ en dados calcs calc idxc ctx tipos idxt tid tipo params
-                       hid lista idx)
+(defun c:HIDROGRAMA (/ en dados calcs calc idxc ctx tid tipo params hid lista idx tipos h)
   (setq en (HID:_SelBacia))
   (if en
     (progn
@@ -336,33 +325,38 @@
           (alert "Nenhum tipo de hidrograma cadastrado.")
         )
         (T
+          ;; cenario: um por calculo; com varios, escolhe (padrao: o cenario em uso, se houver)
           (setq idxc
             (if (= (length calcs) 1)
               0
-              (HYDRO:Escolher "Calculos da bacia:"
+              (HYDRO:Escolher "Cenarios da bacia:"
                               (mapcar 'BAC:RotuloVazao calcs)
                               (1- (length calcs)))))
           (setq calc (nth idxc calcs))
           (setq ctx (BAC:Contexto dados calc))
-          (setq idxt
-            (HYDRO:Escolher "Tipos de hidrograma:"
-                            (mapcar 'HID:_RotuloTipo tipos)
-                            (HID:_IdxTipoPadrao tipos)))
-          (setq tid  (car (nth idxt tipos)))
-          (setq tipo (cdr (nth idxt tipos)))
-          (HYDRO:Set "HYDRO.HID.TIPO" tid)
+          ;; o tipo e o definido na bacia (HIDROGRAMA-TIPO; troque com BACIAEDITA)
+          (setq tid (HID:TipoDaBacia en))
+          (setq tipo (HYDRO:RegGet "hidrograma-tipo" tid))
+          (princ
+            (strcat "\nCenario " (cdr (assoc "CENARIO" calc)) "; tipo de hidrograma da bacia: "
+                    (cdr (assoc "NOME" tipo)) " (troque com BACIAEDITA)."))
           (setq params
-            (HYDRO:AskParams (cdr (assoc "PARAMS" tipo))
-                             (strcat "HYDRO.HID." tid ".")
-                             (HID:_Sobrescritas ctx)))
+            (if (HYDRO:CalcAuto)
+              (HYDRO:ParamsPadrao (cdr (assoc "PARAMS" tipo))
+                                  (strcat "HYDRO.HID." tid ".")
+                                  (HID:_Sobrescritas ctx))
+              (HYDRO:AskParams (cdr (assoc "PARAMS" tipo))
+                               (strcat "HYDRO.HID." tid ".")
+                               (HID:_Sobrescritas ctx))))
           (setq hid (HID:Gerar tid ctx params))
           (if (assoc "ERRO" hid)
             (alert (strcat "Erro: " (cdr (assoc "ERRO" hid))))
             (progn
-              (setq lista (HID:Armazenar en dados hid))
+              (HID:Armazenar en (cdr (assoc "CENARIO" calc)) hid)
               (HYDRO:Emit "hidrograma.gerado"
                 (list
                   (cons "BACIA" en)
+                  (cons "CENARIO" (cdr (assoc "CENARIO" calc)))
                   (cons "TIPO" tid)
                   (cons "METODO" (cdr (assoc "METODO" hid)))
                   (cons "TR" (cdr (assoc "TR" hid)))
@@ -372,8 +366,15 @@
                   (cons "TB" (cdr (assoc "TB" hid)))
                   (cons "VOLUME" (cdr (assoc "VOLUME" hid)))
                   (cons "PONTOS" (cdr (assoc "PONTOS" hid)))))
-              (princ "\nHidrograma gravado na bacia.")
-              (setq idx (vl-position hid lista))
+              (princ "\nHidrograma gravado no cenario da bacia.")
+              ;; posicao do hidrograma deste cenario na lista do visualizador
+              (setq lista (BAC:Hidrogramas (BAC:Ler en)))
+              (setq idx 0)
+              (foreach h lista
+                (if (equal (cdr (assoc "CENARIO" h)) (cdr (assoc "CENARIO" calc)))
+                  (setq idx (vl-position h lista))
+                )
+              )
               (HID:Visualizar en idx)
             )
           )

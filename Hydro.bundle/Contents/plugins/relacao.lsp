@@ -155,17 +155,23 @@
 
 (HYDRO:On "bacia.calculada" "xdata" 'XD:_OnBaciaCalculada)
 
-;; Quando uma bacia e cadastrada (BACIACAD, BACIA ou calculo de sarjeta):
-;; relaciona contorno <-> talvegue (aplicacao DREN-BACIA).
-(defun XD:_OnBaciaCadastrada (dados / bacia talv)
-  (setq bacia (cdr (assoc "BACIA" dados)))
-  (setq talv  (cdr (assoc "TALVEGUE" dados)))
-  (if (and bacia talv)
-    (XD:Link bacia talv nil "DREN-BACIA")
+;; Quando um objeto e cadastrado ("objeto.cadastrado", emitido por OBJ:Salvar): se for
+;; uma bacia (BACIACAD, BACIA ou calculo de sarjeta), relaciona contorno <->
+;; talvegue (aplicacao DREN-BACIA). O talvegue vem de PARAMS do registro.
+(defun XD:_OnObjetoCadastrado (dados / bacia h talv)
+  (if (and (equal (cdr (assoc "TIPO" dados)) "bacia") (HYDRO:Has "objetos"))
+    (progn
+      (setq bacia (cdr (assoc "OBJETO" dados)))
+      (setq h (if bacia (cdr (assoc "TALVEGUE" (OBJ:ParamsDe bacia))) nil))
+      (setq talv (if h (handent h) nil))
+      (if (and talv (HYDRO:EntValida talv))
+        (XD:Link bacia talv nil "DREN-BACIA")
+      )
+    )
   )
 )
 
-(HYDRO:On "bacia.cadastrada" "xdata" 'XD:_OnBaciaCadastrada)
+(HYDRO:On "objeto.cadastrado" "xdata" 'XD:_OnObjetoCadastrado)
 
 ;; Descricao dos dados para o visualizador (nao depende dele)
 (HYDRO:SetLabel "xdata:DREN-SARJETA:1005" "Relacionada com" "")

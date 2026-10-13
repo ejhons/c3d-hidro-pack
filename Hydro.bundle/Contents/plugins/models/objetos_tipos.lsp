@@ -7,10 +7,9 @@
 ;;;
 ;;; Tipos incluidos
 ;;;   trecho      linha/polilinha de rede: diametro e rugosidade
-;;;   estrutura   poco de visita, boca de lobo, caixa, ponto de descarga
-;;;               (estrutura do Civil 3D, bloco, circulo ou ponto)
 ;;;   tubo-c3d    tubo (Pipe) do Civil 3D
-;;; A bacia esta em models/bacia.lsp e a sarjeta em models/sarjeta.lsp.
+;;; A bacia esta em models/bacia.lsp, a sarjeta em models/sarjeta.lsp, o tubo em
+;;; models/tubo.lsp e a estrutura (poco, caixa, ala, boca de lobo) em models/estrutura.lsp.
 ;;;
 ;;; Nomes DXF dos objetos do Civil 3D ("AECC_PIPE", "AECC_STRUCTURE") devem
 ;;; ser conferidos no seu desenho: (cdr (assoc 0 (entget (car (entsel))))).
@@ -24,18 +23,6 @@
   '("LINE" "LWPOLYLINE" "POLYLINE" "SPLINE")
   (list (list "DIAM" "Diametro" 0.6 "m")
         (list "N" "Rugosidade de Manning" 0.013 ""))
-  T
-  T
-  nil
-)
-
-(OBJ:RegistrarTipo
-  "estrutura"
-  "Estrutura"
-  "Poco de visita, boca de lobo, caixa ou ponto de descarga."
-  '("AECC_STRUCTURE" "INSERT" "CIRCLE" "POINT")
-  (list (list "FUNCAO" "Funcao" "poco-de-visita" "" "opcoes"
-              '("poco-de-visita" "boca-de-lobo" "caixa" "ponto-de-descarga")))
   T
   T
   nil

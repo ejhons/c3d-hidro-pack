@@ -28,13 +28,21 @@ Pontos mais incertos, a testar primeiro no AutoCAD:
   `Dock` (0 top, 1 bottom, 2 left, 3 right) e `Float`; posição mantida ao recriar; nome do grupo principal.
 - Menu "Hydro" (`menu.lsp`, API ActiveX `AcadMenuGroup`/`AcadPopupMenu`): nome do grupo principal no
   Civil 3D (usa `ACAD`, senão o primeiro), posição antes de Ajuda, `MENUBAR`, e se não persiste na personalização.
-- `MONTANTE` em `PARAMS` (gravação via `OBJ:GravaRegistro`, `ldata` com `("31")` sem valor), `LIG:` sem o
-  índice `HYDRO.LIGACOES` (varre `OBJ:Listar`), `BAC:_CalcularEGravar` composto, `VAZAO-EM` reavaliando o método,
+- `JUSANTE` em `PARAMS` (gravação via `OBJ:GravaRegistro`, `ldata` com `("31")` sem valor; **mudou de MONTANTE no receptor para JUSANTE na origem**, ainda não testado), `LIG:` sem
+  índice (varre `OBJ:Listar`; custo com muitos objetos), `BAC:_CalcularEGravar` composto, `VAZAO-EM` reavaliando o método,
   `LIGAR` perguntando o flag, sarjeta recebendo sarjeta em cadeia. Desenhos antigos com `HYDRO-LIG` **não migram**.
 - Recálculo automático dos montantes, `LIG:OferecerLigacao` (prompt `getkword` com `initget` montado), `PADROES`
   (`HYDRO:_AskUm`), modo `CALCAUTO` e `sssetfirst`/`ssget` na oferta de ligação: nada disso foi executado.
 - Etiquetas/tabela viva: `vla-addtable`/`vla-settext`/`vla-insertrows` e `vla-put-textstring` no MTEXT, `ssget "_X"` por camada
   (camada congelada?), assinatura dos eventos e a atualização a cada cálculo (custo com muitos objetos).
+- **Armazenamento padronizado da bacia** (sem `ARMAZENAMENTO` proprio): `OBJ:Salvar`/`OBJ:RegistroDe`, gancho `AO-REMOVER`, indice unico `HYDRO.OBJETOS`
+  (sumiu `HYDRO.BACIAS`; desenhos antigos precisam de Reindexar), relacao XData agora via `objeto.cadastrado` (sumiram `bacia.cadastrada`/`bacia.removida`). Nada executado.
+- **LIGACOESVER** (`views/ligacao_visual_view.lsp`): nada executado. Incertos: `grvecs` (lista `(cor p1 p2 ...)`; se os pontos sao em UCS ou WCS: o codigo converte WCS->UCS com `trans`), se some em REGEN/zoom, `VIEWSIZE` como escala dos tracos, `vla-getboundingbox` em contornos.
+- **Escada hidráulica** (`models/escada.lsp`, método `registry/escada_siscooh.lsp`) e **dissipador** (`registry/estrutura_dissipador.lsp`, métodos `dissipacao.lsp`/`_usbr`/`_enrocamento`): nada executado no AutoCAD; equações do SisCCoH 1.1 conferidas só contra os exemplos do manual (testes em `HYDROTESTE`, valores do próprio manual). Itens calibrados/deduzidos no manual: α = 0,54 (eq. 4.31), eq. 4.27, `LA`/`WB` do enrocamento; tabela de `Co` de memória; risco de cavitação não implementado; polinômios devem ser conferidos nas fontes originais. Incertos: seção retangular do catálogo de tubo, campos dinâmicos do dissipador (`CAMPOS-FN`), estado final da escada lido pelo dissipador.
+- **Estrutura** (atomizada: `models/estrutura.lsp`, `plugins/tipo_estrutura.lsp`, `registry/estrutura_passagem|estrutura_boca_lobo|captacao.lsp`, `tipo_estrutura_view.lsp`): nada executado. Incertos: despacho pela classe (`classe-estrutura`), `HYDRO:AskParams` com `opcoes` dinâmicas nos campos da classe, `OBJ:ResultGrupoDe` dos montantes (VELOCIDADE/ALTURA_LAMINA), captação (a boca afogada só avisa, nao divide a vazao).
+- **Tubo/canal** (`models/tubo.lsp`, `plugins/secao_tubo.lsp`, `secao_tubo_view.lsp`): nada executado. Incertos: `vlax-curve-getStartPoint/EndPoint` em `POLYLINE` 3D/`LINE` (Z das pontas), bissecção de Manning (testada só em Python), comandos do catálogo de seções; visualizador `SECAOTUBO` (DCL `secao_tubo.dcl`, desenho em `vector_image`/`fill_image`, margens e textos da imagem).
+- **RESULT por cenário** (etapas 1 a 5): nada executado. Incertos: `OBJ:GravarCalculo` e a leitura de cenários com listas aninhadas em `ldata`, nomes de cenário com `-`, etiquetas lendo o registro uma vez, tabela `*`, `getstring` do comando `CENARIO`.
+- **Esqueleto único** (etapas 1 a 5 do plano): cadastro genérico com `PARAMS-DEFS`/`CARACT-DEFS`, `<TIPO>EDITA`, `OBSOLETO` e sua propagação, `CARACTAUTO`, tc da bacia só no cálculo (`BAC:Preparar`), `OBJ:_Igual`. Nada executado: `vl-catch-all-apply` em `OBJ:_Caracteriza`, `getkword` `[Usar/Trocar/Remover]`, tipo `"opcoes"` com símbolo dinâmico (`BAC:_IdsTc`) em `HYDRO:AskParams`, comparação de reais em `ldata`.
 - Rodar `HYDROTESTE` (carregar `tests/teste_manual.lsp`).
 
 ## Estrutura
@@ -71,19 +79,30 @@ Fonte da verdade da arquitetura, dos contratos e dos formatos de dados:
 5. **Catálogos extensíveis** (`HYDRO:RegAdd/RegGet/RegList`) para métodos chuva-vazão,
    métodos de tc, tipos de hidrograma e **tipos de objeto hidráulico**.
    **Aberto/fechado:** coisa nova = arquivo novo com um cadastro; não altere o que já existe.
-6. **O receptor guarda a ligação**: campo `MONTANTE` do `PARAMS` dele, dicionário `(handle . flag)` com flag T = "contribui diretamente ao talvegue" (nil = ausente); a origem não guarda nada. `TALVEGUE` é componente da bacia, não montante, e fica em campo próprio.
-   Uma única fonte de verdade; destino calculado. Detalhes e integridade em `arquitetura.md` seção 15.
+6. **A origem guarda o destino**: campo `JUSANTE` do `PARAMS` dela, par `(handle-do-destino . flag)` com flag T = "contribui diretamente ao talvegue" (nil = ausente); o destino não guarda nada e os montantes são derivados (`LIG:ListaMontante` varre o desenho). Um par escalar impede dois destinos (dupla contagem). `TALVEGUE` é componente da bacia, não montante, e fica em campo próprio.
+   Uma única fonte de verdade; montantes calculados. Detalhes e integridade em `arquitetura.md` seção 15.
 7. **Bacia continua sendo a bacia** (plugin `bacia`, cadastro no contorno, registro padrão `HYDRO-OBJ`; sem compatibilidade com formatos anteriores).
    Não altere o comportamento dela para acomodar objetos; use eventos e capacidades do catálogo.
 8. Dados em entidades via `HYDRO:DadoLer/Gravar/Apagar` (extensão da entidade, com reserva central).
-9. **Interface padrão do objeto** (portas e adapters; `docs/arquitetura.md` seção 18): todo objeto do desenho guarda `VERSAO TIPO NOME DESCRICAO ATRIB CARACT RESULT` (+ `PARAMS` só para ligar a outro objeto). `ATRIB` = o usuário define; `CARACT` = o desenho informa; `RESULT` = tudo que é calculado, em **grupos com nome** (`TC`, `VAZAO`, `HIDRAULICA`, `HIDROGRAMAS`) com os campos calculados **planos** na entrada (nunca uma lista `CALCULOS` nem sub-lista `RES`). Tipo novo herda o armazenamento da classe base `objetos.lsp`; só declara `ARMAZENAMENTO` (5 operações; LER devolve o registro padrão) se precisar de gravação, índice ou remoção próprios, como a bacia. Nenhum plugin guarda estrutura própria.
+9. **Interface padrão do objeto** (portas e adapters; `docs/arquitetura.md` seção 18): todo objeto do desenho guarda `VERSAO TIPO NOME DESCRICAO ATRIB CARACT RESULT` (+ `PARAMS` só para ligar a outro objeto). `ATRIB` = o usuário define; `CARACT` = o desenho informa (ou o usuário digita, `CARACT-DEFS`, marcado em `CARACT/MANUAL`); `RESULT` = tudo que é calculado, em **grupos com nome** (`TC`, `VAZAO`, `HIDRAULICA`, `HIDROGRAMAS`) com os campos calculados **planos** na entrada (nunca uma lista `CALCULOS` nem sub-lista `RES`). Tipo novo herda o armazenamento da classe base `objetos.lsp`; **nenhum model declara `ARMAZENAMENTO`** (bacia e sarjeta herdam igual; `verificar.py` recusa). Personaliza por ganchos (`CARACTERIZA (en vinculos)`, `PARAMS-DEFS`, `CARACT-DEFS`, `PADROES`, `AO-REMOVER`) e **usa o cadastro genérico** (`OBJ:CadastrarCom`/`OBJ:CadastroInterativoTipo`, que termina em `OBJ:Salvar` e emite `objeto.cadastrado`); **cadastrar nunca calcula** (tc, vazão e hidráulica nascem no cálculo). Lê com `OBJ:RegistroDe`. Esqueleto: `docs/objeto_generico.lsp`; plano: `docs/plano_esqueleto_unico.md`. `ARMAZENAMENTO` (5 operações) só para quem guarda fora da extensão da entidade. Nenhum plugin guarda estrutura própria.
 
 10. **Comandos padrão do objeto** (`docs/arquitetura.md` seção 18b): todo modelo em `plugins/models/` define
-   `<TIPO>CAD` (cadastra/edita), `<TIPO>S` (lista), `<TIPO>INFO` e `<TIPO>ZOOM` (localiza), chamando os
+   `<TIPO>CAD` (cadastra/edita), `<TIPO>EDITA` (altera um campo), `<TIPO>S` (lista), `<TIPO>INFO` e `<TIPO>ZOOM` (localiza), chamando os
    fluxos genéricos `OPV:*` (`views/objetos_padrao_view.lsp`); `verificar.py` confere. `PARAMS` só guarda
    handles de outras entidades (vira vínculo, realçado por `OBJETOVINCULOS`). Cada plugin que guarda
    dados com referências **cadastra uma verificação** no catálogo `auditoria` (`HYDRO:RegAdd "auditoria"`)
    para o `HYDROAUDIT` achar e corrigir referências quebradas.
+
+11. **RESULT por cenário** (`docs/plano_resultados_cenarios.md`, `arquitetura.md` 18e): `RESULT` = `(("TR25" . cenario) ...)`; cada cenário
+   tem os grupos do tipo (bacia: `TC`, `PRECIPITACAO`, `ENTRADA`, `VAZAO`, `HIDROGRAMA`; sarjeta: `ENTRADA`, `VAZAO`, `ALTURA_LAMINA`...) com
+   campos planos (`VALOR`, `METODO`, `INPUT` mínimo; nunca copiar `ATRIB`/`CARACT`) e o grupo reservado `CENARIO` (`TR`, `OBSOLETO`).
+   O cenário nasce do TR (`TR25`; `CENARIO` define um nome: `TR25-Nome`). Calcular o cenário X usa o X dos montantes; um calculo
+   inteiro e gravado com `OBJ:GravarCalculo` (uma gravacao). `CALCULA` do tipo devolve **grupos**.
+
+12. **Resultado desatualizado** (`docs/arquitetura.md` 18d): editar `ATRIB`/`PARAMS`/`CARACT` de um objeto com `RESULT` grava
+   `("OBSOLETO" . T)` (sem apagar o resultado); ligar/desligar/remover marcam o destino. Com `HYDRO.OBSOLETO.PROPAGA` = 1
+   (`PROPAGAOBSOLETO`) a marca segue a jusante (`OBJ:Invalidar`, só a tag, sem recalcular). Só calcular remove a marca.
+   `HYDRO.CARACT.AUTO` = 1 (`CARACTAUTO`) relê o desenho antes de calcular (`OBJ:AtualizaCaract`; bacia: `BAC:Preparar`).
 
 ## Regras de código AutoLISP (aprendidas aqui)
 
@@ -137,7 +156,9 @@ Na pasta de código-fonte **não deixe `.fas`**: o carregador prefere `.fas` a `
   compilação recomendado; VLX só com **namespace compartilhado** (ver `docs/compilacao.md`).
 - Raiz do conjunto: `HYDRO:*dir*`, escolha gravada no Registro com `HYDRODIR`.
 - Exagero vertical das seções é **escolhido pelo usuário** (nunca automático); escala se ajusta, o exagero não.
-- Cadastro **comum** de bacias e sarjetas (`BAC:Obter`); atributos C e CN da bacia viram padrão dos métodos.
+- Cadastro **comum** e genérico para todo objeto (`OBJ:CadastrarCom`; `docs/plano_esqueleto_unico.md`): **cadastrar nunca calcula**;
+  tc da bacia nasce em `BAC:Preparar`; atributos C e CN da bacia viram padrão dos métodos. Editar marca `OBSOLETO` (propaga a jusante
+  com `HYDRO.OBSOLETO.PROPAGA`); `HYDRO.CARACT.AUTO` relê o desenho antes de calcular.
 - **Objeto = mecanismo entrada → saída** (`docs/arquitetura.md` 15.4): entrada = soma das saídas gravadas dos
   montantes e maior tempo de saída; saída = precipitação sempre no maior tempo (bacias a montante reavaliadas
   por `VAZAO-EM`; racional composto exato). Tempo de saída da bacia: máximo se o montante não contribui ao talvegue,
@@ -161,7 +182,9 @@ Na pasta de código-fonte **não deixe `.fas`**: o carregador prefere `.fas` a `
 ## Pendências e ideias (ordem aproximada)
 
 - Validar tudo no AutoCAD/Civil 3D (ver "Status honesto") e corrigir o que aparecer.
-- Migrar `SARJ:Calcular` para usar o tipo `sarjeta` / `LIG:` (hoje coexistem).
+- Migrar `SARJ:Calcular` para usar o tipo `sarjeta` / `LIG:` (hoje coexistem; `plugins/sarjetas` está fora desta árvore e pode chamar `BAC:Obter`, que não existe mais).
+- Propagação de hidrogramas pela rede (`PONTOS` somados em `ENTRADA`); hidrograma gerado automaticamente em `BACIA` (a decidir).
+- Testar no AutoCAD o `RESULT` por cenário (ver Status honesto).
 - Propagação de hidrogramas pela rede (hoje só soma de picos); hietograma em vez de chuva em bloco único.
 - Fração de escoamento nas ligações (o formato do afluente já comporta).
 - Ícones desenhados à mão no lugar dos gerados (o usuário se ofereceu a criar; basta usar os mesmos nomes).

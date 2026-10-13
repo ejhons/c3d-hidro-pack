@@ -29,7 +29,7 @@ registry/   CATÁLOGOS (só cadastros de métodos e tipos; carregam depois do si
 bacia_view  BAC:     (views/) perguntas, comandos e etiquetagem da bacia (BACIACAD, BACIA, TEXTOBACIA...)
 bacia_tabela BTB:    (views/) tabela das bacias do desenho (detalhes, ações, CSV)
 objetos     OBJ:     objetos hidráulicos genéricos: catálogo de TIPOS e cadastro em qualquer entidade
-ligacao     LIG:     ligações de descarga entre objetos (o receptor guarda os montantes em `PARAMS`), tc acumulado e integridade
+ligacao     LIG:     ligações de descarga entre objetos (a origem guarda o destino em `PARAMS`; os montantes são derivados), tc acumulado e integridade
 objetos_tabela OBT:  tabela de objetos e ligações (LIGACOES)
 hidrograma  HID:     geração e armazenamento de hidrogramas (os tipos estão em registry/); gráfico e CSV em views/
 viewer      VIEW:    visualização dos dados persistidos
@@ -91,14 +91,12 @@ Um assinante com erro não derruba o emissor nem os demais.
 | Evento                | Emitido por                                    | Assinado por                                                                  | Dados                                                                                                                                                                                                                                                                                                             |
 | --------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `sarjeta.calculada` | `sarjetas`                                   | `relacao` (grava XData), `secao` (guarda último Q/S)                     | `"BACIA"` `"TALVEGUE"` (enames), `"AREA"`, `"COMPRIMENTO"`, `"DECLIVIDADE"`, `"TC"`, `"CASOS"` (lista de `(rotulo tr intensidade vazao)`), `"Q"` (vazão do primeiro caso, m³/s), `"LAMINA"`, `"LARGURA"`, `"AREA-MOLHADA"`, `"VELOCIDADE"`, `"SECAO"`, `"SECAO-ID"`, `"AVISOS"` |
-| `objeto.cadastrado` | `objetos`                                    | —                                                                            | `"OBJETO"` (ename), `"TIPO"`                                                                                                                                                                                                                                                                                  |
+| `objeto.cadastrado` | `objetos` (`OBJ:Salvar`; também a bacia, via `BAC:Cadastrar`) | `etiqueta` (atualiza), `relacao` (se `TIPO` = `bacia`, relaciona contorno↔talvegue, XData `DREN-BACIA`) | `"OBJETO"` (ename), `"TIPO"` |
 | `hydro.carregado`   | `core` (fim de `HYDRO:LoadAll`; e `hydro.lsp` no modo VLX) | `menu` (cria o menu), `toolbar` (cria as barras) | nenhum. Indica que **todos** os plugins já cadastraram catálogos, ações e rótulos |
-| `objeto.removido`   | `objetos` (e `models/bacia`, para a bacia) | `ligacao` (desfaz as ligações do objeto)                                  | `"OBJETO"`. Emitido **antes** de apagar o cadastro                                                                                                                                                                                                                                                        |
-| `bacia.removida`    | `models/bacia`                               | `models/bacia` (reemite como `objeto.removido`)                           | `"BACIA"` (ename). Emitido antes de apagar o cadastro                                                                                                                                                                                                                                                           |
+| `objeto.removido`   | `objetos` (`OBJ:Remover`, para todos os tipos) | `ligacao` (desfaz as ligações do objeto)                                  | `"OBJETO"`. Emitido **antes** de apagar o cadastro                                                                                                                                                                                                                                                        |
 | `ligacao.criada`    | `ligacao`                                    | — (ponto de conexão futuro)                                                 | `"ORIGEM"`, `"DESTINO"` (enames), `"ANTERIOR"` (ename ou nil: destino de onde foi movida)                                                                                                                                                                                                                   |
 | `ligacao.removida`  | `ligacao`                                    | —                                                                            | `"ORIGEM"`, `"DESTINO"`                                                                                                                                                                                                                                                                                       |
 | `objeto.calculado`  | `ligacao` (CALCULAOBJETO)                    | —                                                                            | `"OBJETO"`, `"TIPO"`, `"METODO"`, `"TR"`, `"RES"`                                                                                                                                                                                                                                                       |
-| `bacia.cadastrada`  | `bacia`                                      | `relacao` (relaciona contorno↔talvegue, XData `DREN-BACIA`)              | `"BACIA"` `"TALVEGUE"` (enames), `"NOME"`, `"AREA"`, `"COMP"`, `"DESNIVEL"`, `"DECL"`, `"TC"`, `"TC-ORIGEM"`, ...                                                                                                                                                                               |
 | `bacia.calculada`   | `bacia`                                      | `relacao` (relaciona contorno↔talvegue e grava Qp em XData `DREN-BACIA`) | `"BACIA"` `"TALVEGUE"` (enames), `"AREA"`, `"COMP"`, `"DECL"`, `"TC"`, `"METODO"`, `"TR"`, `"DUR"`, `"QP"`, `"PE"`, `"VOLUME"`                                                                                                                                                            |
 | `hidrograma.gerado` | `hidrograma`                                 | — (ponto de conexão futuro)                                                 | `"BACIA"` (ename), `"TIPO"`, `"METODO"`, `"TR"`, `"DUR"`, `"QP"`, `"TP"`, `"TB"`, `"VOLUME"`, `"PONTOS"` (lista de `(t_min . q_m3s)`)                                                                                                                                                       |
 
@@ -129,7 +127,6 @@ Com o plugin `persistencia`, grava no desenho; sem ele, só na sessão.
 | `HYDRO.ULTIMO.DECL`                                       | real             | `secao`             | Declividade longitudinal (m/m) do último cálculo                                           |
 | `HYDRO.ULTIMO.SECAO`                                      | inteiro          | `secao`             | Id da seção usada no último cálculo                                                      |
 | `HYDRO.TC.MINIMO`, `HYDRO.TR`, `HYDRO.SURFACE.HANDLE` | real/real/string | `sarjetas`, `idf` | **Compartilhadas** também pelo plugin `bacia`                                       |
-| `HYDRO.BACIAS`                                            | lista de strings | `bacia`             | Handles das bacias cadastradas (índice para listar)                                         |
 | `HYDRO.BACIA.METODO`                                      | string           | `bacia`             | Último método chuva-vazão usado                                                           |
 | `HYDRO.BACIA.TCMETODO`                                    | string           | `bacia`             | Último método de tc escolhido                                                              |
 | `HYDRO.OBJETOS`                                           | lista de strings | `objetos`           | Handles dos objetos cadastrados (índice)                                                    |
@@ -194,7 +191,15 @@ Chaves de XData: `xdata:<APP>:<codigo>`. Chaves de DB: o próprio path.
 | `OBJETO`                                                                                    | objetos        | Cadastra/edita uma entidade como objeto hidráulico (escolhe o tipo entre os que aceitam a entidade)                              |
 | `OBJETOINFO`, `OBJETOREMOVER`                                                             | objetos        | Dados do objeto / remove o cadastro (desfaz as ligações dele)                                                                   |
 | `OBJETOS`, `OBJETOZOOM`, `OBJETOVINCULOS` | objetos-padrao-view | Lista objetos de um tipo / localiza qualquer objeto (zoom) / realça os vínculos de `PARAMS` (seção 18b) |
-| `SARJETACAD`, `SARJETAS`, `SARJETAINFO`, `SARJETAZOOM`, `BACIAZOOM` | sarjeta, bacia | Comandos padrão do objeto (seção 18b) |
+| `SARJETACAD`, `SARJETAS`, `SARJETAINFO`, `SARJETAZOOM`, `SARJETAEDITA`, `BACIAZOOM` | sarjeta, bacia | Comandos padrão do objeto (seção 18b); `<TIPO>EDITA` altera um campo |
+| `CARACTAUTO` | objetos | Flag `HYDRO.CARACT.AUTO` (padrão 1): reler o desenho (`CARACTERIZA`) antes de calcular (seção 18d) |
+| `ESTRUTURACAD`, `ESTRUTURAEDITA`, `ESTRUTURAS`, `ESTRUTURAINFO`, `ESTRUTURAZOOM` | estrutura | Comandos padrão da estrutura (seção 18g) |
+| `CRIATIPOESTRUTURA`, `EDITATIPOESTRUTURA`, `REMOVETIPOESTRUTURA`, `TIPOESTRUTURA` | tipo-estrutura-view | Catálogo de tipos de estrutura |
+| `ESCADACAD`, `ESCADAEDITA`, `ESCADAS`, `ESCADAINFO`, `ESCADAZOOM` | escada | Comandos padrão da escada hidráulica (seção 18h) |
+| `TUBOCAD`, `TUBOEDITA`, `TUBOS`, `TUBOINFO`, `TUBOZOOM` | tubo | Comandos padrão do tubo/canal (seção 18f) |
+| `CRIASECAOTUBO`, `EDITASECAOTUBO`, `REMOVESECAOTUBO`, `SECAOTUBO` | secao-tubo-view | Catálogo de seções de tubo/canal (circular, retangular, trapezoidal) |
+| `LIGACOESVER` | ligacao-visual-view | Mostra na tela, **temporariamente** (`GRVECS`; some com REDRAW/REGEN), uma linha tracejada fraca com seta: **sai do fim** e **entra no início** da curva (talvegue da bacia, sarjeta, tubo); contorno fechado sem talvegue: do centro ao centro; também aparece após o `LIGAR` |
+| `PROPAGAOBSOLETO` | objetos | Flag `HYDRO.OBSOLETO.PROPAGA` (padrão 1): editar marca o jusante como desatualizado (seção 18d) |
 | `HYDROAUDIT` | auditoria-view | Audita o desenho, pergunta e corrige (seção 18b) |
 | `LIGAR`                                                                                     | ligacao        | Origens (várias) → destino. Enter no destino usa o destino padrão da origem (a bacia sugere o próprio talvegue)               |
 | `DESLIGAR`                                                                                  | ligacao        | Tira a(s) origem(ns) do destino atual                                                                                             |
@@ -268,13 +273,18 @@ da bacia é distribuído em `PARAMS`/`ATRIB`/`CARACT`/`RESULT`); acompanham a
 entidade ao copiar, colar e salvar.
 
 O plugin trabalha **diretamente** com esse registro (não há estrutura
-intermediária): `BAC:Ler` devolve o registro, `BAC:Gravar` grava.
+intermediária). O armazenamento é **herdado** da classe base (`objetos.lsp`), igual ao
+da sarjeta: `BAC:Ler` é a leitura tipada (`OBJ:RegistroDe en "bacia"`); grava-se com
+`OBJ:GravaRegistro "bacia" en reg`; o cadastro é o **genérico** (`OBJ:CadastrarCom`, que termina em
+`OBJ:Salvar` e emite `objeto.cadastrado`): talvegue em `PARAMS-DEFS` (opcional), `AREA/COMP/DECL` em
+`CARACT-DEFS`, e o método do tc em `ATRIB` (`TC-METODO`, `TC-USUARIO`). **Cadastrar não calcula o tc**: ele
+nasce em `BAC:Preparar` (no cálculo; relê o desenho, aplica `BAC:TcDe` e grava `RESULT/TC`).
 
 ```
 (("VERSAO" . 2) ("TIPO" . "bacia") ("NOME" . "B1") ("DESCRICAO" . "texto")
  ("SPARAMS" . (("TALVEGUE" . "handle")))
- ("ATRIB"  . (("C" . 0.6) ("CN" . 80.0)))
- ("CARACT" . (("AREA" . m2) ("COMP" . m) ("DESNIVEL" . m) ("DECL" . m/m)))
+ ("ATRIB"  . (("C" . 0.6) ("CN" . 80.0) ("TC-METODO" . "kirpich") ("TC-USUARIO" . 0.0)))
+ ("CARACT" . (("AREA" . m2) ("COMP" . m) ("DESNIVEL" . m) ("DECL" . m/m) ["MANUAL" . chaves]))
  ("RESULT" . (("TC" . (("MIN" . min) ("ORIGEM" . "kirpich"|"usuario") ("PARAMS" . alist)))
               ("VAZAO" . (vazao ...))
               ("HIDROGRAMAS" . (hidrograma ...)))))
@@ -291,17 +301,17 @@ hidrograma = (("TIPO" . id) ("METODO" . id) ("TR" . anos) ("DUR" . min)
 
 Acessos: `BAC:Nome`, `BAC:Descricao`, `BAC:Params`, `BAC:Talvegue`, `BAC:Atrib`,
 `BAC:Caract`, `BAC:Result`, `BAC:Tc`, `BAC:Calculos`, `BAC:Hidrogramas`. Alterar um resultado: `BAC:_SetResult dados chave valor`.
-Outras funções: `BAC:Listar`, `BAC:Caracterizar`, `BAC:ExecutarMetodo`,
-`BAC:Contexto`, `BAC:Obter`. Chaves **não** guardam valores `nil`; use `T` ou
+Outras funções: `BAC:Caracterizar`, `BAC:ExecutarMetodo`,
+`BAC:Contexto`, `BAC:TcDe`, `BAC:Preparar`. Chaves **não** guardam valores `nil`; use `T` ou
 omita o par.
 
-`BAC:Obter` e `BAC:CadastroInterativo` devolvem um **contexto de cálculo**
+`BAC:Preparar` devolve um **contexto de cálculo**
 (`BAC:_Ctx`): características + `"TC"`, `"TC-ORIGEM"`, `"NOME"` e atributos
 (C, CN). Ele **não** é o que fica gravado, só a entrada dos métodos.
 
 **Preparação para conectar** (ainda não conectado): o plugin de sarjetas tem
 sua própria cópia da geometria (área, comprimento, Kirpich). Quando as
-informações forem conectadas, `SARJ:` passa a usar `BAC:Caracterizar`, e a
+informações forem conectadas, `SARJ:` passa a usar `OBJ:CaractDe`/`BAC:Preparar`, e a
 sarjeta pode ler `BAC:Ler` para obter a vazão de pico da bacia que a alimenta.
 Os eventos `bacia.calculada` e `hidrograma.gerado` já existem para isso.
 
@@ -347,7 +357,7 @@ vértices em `extras` (ex.: o pico).
 
 O plugin `bacia` guarda o cadastro no dicionário de extensão do **contorno**
 (chave `HYDRO-OBJ`). A bacia **não guarda nada da sarjeta**: o plugin de sarjetas
-apenas lê o cadastro (`BAC:Obter`) quando `bacia` está carregado (sem ele,
+apenas lê o cadastro (`OBJ:CaractDe`/`BAC:Ler`) quando `bacia` está carregado (sem ele,
 sarjetas continua funcionando sozinho). Resultados de sarjeta pertencem ao
 objeto sarjeta.
 
@@ -364,7 +374,7 @@ Como os dois plugins compartilham:
 
 | Quem                          | O que usa do cadastro                                                                                                                                                                                                                                                                                                 |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sarjetas`                  | `BAC:Obter contorno talvegue`: área, comprimento, declividade, **tc (pelo método cadastrado)** e **C**. Se a bacia não está cadastrada, cadastra sozinho (Kirpich com tc mínimo). Se o contorno, o talvegue ou a superfície mudaram, atualiza o cadastro mantendo nome, atributos e método de tc |
+| `sarjetas`                  | (legado, arquivo ausente) usava `BAC:Obter`, que **não existe mais**: a bacia deve estar cadastrada (`BACIACAD`) e o tc nasce em `BAC:Preparar` |
 | `bacia` (comando `BACIA`) | Reutiliza o cadastro (tc, atributos). Atributos coincidentes viram**padrão dos parâmetros** do método (ex.: `CN` do cadastro preenche o `CN` do SCS; `C` preenche o `C` do racional)                                                                                                                 |
 
 Prioridade do coeficiente de escoamento na sarjeta: **C do cadastro da bacia**
@@ -382,9 +392,9 @@ Rodar de novo edita o cadastro, mantendo os cálculos e hidrogramas.
 (insere cálculos já cadastrados; pergunta qual ou todos). Usam a altura e a
 rotação de `ATUALIZAALTURATEXTO` e `ATUALIZAROTACAOTEXTO` (as mesmas das sarjetas).
 
-**Índice:** `HYDRO.BACIAS` guarda só os handles, para listar sem varrer o
-desenho. `BACIATABELA` reconstrói o índice sozinho se estiver vazio (por
-exemplo, ao colar bacias de outro desenho) e há o botão **Reindexar**.
+**Índice:** o da classe base, `HYDRO.OBJETOS` (só handles), para listar sem varrer o
+desenho (`OBJ:ListaTipo "bacia"`). `BACIATABELA` reconstrói o índice sozinho se estiver
+vazio (por exemplo, ao colar bacias de outro desenho) e há o botão **Reindexar**.
 
 ## 14. Métodos de tempo de concentração
 
@@ -470,7 +480,13 @@ registro no desenho, caracterização, cálculo e a declaração do tipo no cat�
 
 | Arquivo                      | Prefixo  | Conteúdo                                                                                                                                                                                                                                                                                                                | Fora da pasta                                                                                                                                                                                                |
 | ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `models/bacia.lsp`         | `BAC:` | registro`HYDRO-OBJ`, `BAC:Caracterizar`, tc (`BAC:CalcularTc`), `BAC:ExecutarMetodo`, cálculo e gravação (`BAC:_CalcularEGravar`), `BAC:Obter`, índice `HYDRO.BACIAS`, linhas de texto do cadastro (`BAC:LinhasCadastro`) e a declaração do tipo `bacia` (vazão, área, destino padrão, regra) | `views/bacia_view.lsp`: só etiquetagem (`BAC:_InsereTexto`, `TEXTOBACIA`, `CRIARBACIARESULTADO`). Os comandos `BACIACAD`, `BACIA`, `BACIAS`, `BACIAINFO` e `BAC:ToString` estão no model |
+| `models/bacia.lsp`         | `BAC:` | registro`HYDRO-OBJ`, `BAC:Caracterizar`, tc (`BAC:CalcularTc`), `BAC:ExecutarMetodo`, cálculo e gravação (`BAC:_CalcularEGravar`), `BAC:Obter`, índice da classe base (`HYDRO.OBJETOS`), linhas de texto do cadastro (`BAC:LinhasCadastro`) e a declaração do tipo `bacia` (vazão, área, destino padrão, regra) | `views/bacia_view.lsp`: só etiquetagem (`BAC:_InsereTexto`, `TEXTOBACIA`, `CRIARBACIARESULTADO`). Os comandos `BACIACAD`, `BACIA`, `BACIAS`, `BACIAINFO` e `BAC:ToString` estão no model |
+| `models/escada.lsp`        | `ESC:` | escada hidráulica (objeto linear): geometria dos degraus, altura crítica, hook `metodo-escada` | — |
+| `plugins/tipo_estrutura.lsp` | `TES:` | **catálogo** de tipos de estrutura (`HYDRO.TIPOS.ESTRUTURA`: criar, editar, remover, em uso, tipo atual) e **registro de classes** (`classe-estrutura`) | `views/tipo_estrutura_view.lsp`: `CRIATIPOESTRUTURA`, `EDITATIPOESTRUTURA`, `REMOVETIPOESTRUTURA`, `TIPOESTRUTURA` |
+| `plugins/registry/estrutura_passagem.lsp`, `estrutura_boca_lobo.lsp`, `estrutura_dissipador.lsp`, `captacao.lsp`, `dissipacao.lsp`, `dissipacao_usbr.lsp`, `dissipacao_enrocamento.lsp`, `escada_siscooh.lsp` | `ESP:`, `EBL:`, `EDI:`, `CAP:`, `DIS:`, `DUS:`, `DEN:`, `ESS:` | uma **classe** de estrutura por arquivo (passagem: perda de carga; boca de lobo: captação; dissipador: balanço de energia) e os catálogos `metodo-captacao` e `metodo-dissipacao` | — |
+| `models/estrutura.lsp`     | `EST:` | só o **objeto** estrutura: despacha para a classe do tipo (`CALCULA`, `FORMATA`), dados dos montantes, resumo, auditoria `tipo-estrutura` | — |
+| `plugins/secao_tubo.lsp`   | `STB:` | **gerenciamento** do catálogo de seções de tubo/canal (`HYDRO.SECOES.TUBO`): criar, editar, remover, em uso, hidráulica (adaptador), último cálculo, auditoria `secao-tubo-atual` | `views/secao_tubo_view.lsp` (visualizador e comandos) |
+| `models/tubo.lsp`          | `TUB:` | tubo/canal circular, retangular ou trapezoidal: leitura do catálogo (`TUB:Secoes`), `TUB:Resolver` (altura por Manning, bissecção), `TUB:Calcular`, `TUB:Resumo`/`Formata`, auditoria `secao-tubo`, tipo `tubo` | `views/secao_tubo_view.lsp`: `CRIASECAOTUBO`, `EDITASECAOTUBO`, `REMOVESECAOTUBO`, `SECAOTUBO` |
 | `models/sarjeta.lsp`       | `SOB:` | seções (`HYDRO.SECOES`), superfície, geometria do desenho, `SOB:LaminaIzzard`, `SOB:Calcular`, `SOB:Resumo`, `SOB:Formata` e a declaração do tipo `sarjeta`                                                                                                                                             | `plugins/sarjetas.lsp`: cálculo direto antigo, comandos e texto no desenho                                                                                                                                |
 | `models/objetos_tipos.lsp` | `OTP:` | tipos`trecho`, `estrutura`, `tubo-c3d`                                                                                                                                                                                                                                                                             | —                                                                                                                                                                                                           |
 
@@ -529,32 +545,37 @@ destino usa o destino padrão da origem, que para a bacia é o próprio talvegue
 
 ### 15.2 Onde fica a informação (decisão de projeto)
 
-O **receptor** guarda a lista de **montantes** no `PARAMS` do registro padrão dele (campo
-`"MONTANTE"`, seção 18). A origem **não guarda nada**. Motivos:
+A **origem** guarda o seu **destino único** (`JUSANTE`) no `PARAMS` do registro padrão dela
+(seção 18). O destino **não guarda nada**: os montantes dele são *calculados* varrendo quem o
+cita. Motivos:
 
-| Alternativa                           | Problema                                                                                                |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| A origem guarda o destino             | Muitas origens → um destino: ao apagar/copiar o destino, as origens ficam apontando para o nada        |
-| Os dois lados guardam                 | Dois valores que podem divergir; é preciso reconciliar                                                 |
-| **O receptor guarda (adotado)** | **Uma única fonte de verdade.** O destino de uma origem é *calculado* procurando quem a lista |
+| Alternativa                                | Problema                                                                                                         |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| O receptor guarda a lista de montantes     | Nada impede a mesma origem em dois receptores: a mesma água seria contada duas vezes (era a `DUPLICADA`)         |
+| Os dois lados guardam                      | Dois valores que podem divergir; é preciso reconciliar                                                          |
+| **A origem guarda o destino (adotado)**    | **Um campo escalar: dois destinos são impossíveis pela estrutura.** Religar é uma gravação só; apagar a origem não deixa referência |
 
-Consequências: a bacia fica exatamente como era (princípio aberto/fechado); um
-objeto novo pode receber bacias sem que a bacia saiba de nada; apagar o receptor
-leva a lista junto. O custo é achar o destino de uma origem: `LIG:Destino`
-varre os objetos cadastrados (`OBJ:Listar`); não há índice próprio.
+Consequências: a bacia fica como era (aberto/fechado); um objeto novo pode receber bacias
+sem que a bacia saiba de nada. É o modelo de nó de saída usado por SWMM e HEC-HMS. O custo é
+achar os montantes de um objeto: `LIG:ListaMontante` varre os objetos cadastrados
+(`OBJ:Listar`, via `LIG:Pares`); as consultas transitivas (`LIG:Montante`) montam o mapa
+destino → origens **uma vez** por chamada. Não há índice próprio nem variável global.
+Um destino apagado deixa a origem apontando para o nada: a auditoria `ligacoes` acha e
+corrige (a origem fica sem destino).
 
 ```
 PARAMS = (("TALVEGUE" . "2A")                 ; só a bacia: é componente dela, não montante
-          ("MONTANTE" . (("30" . T)           ; dicionário  handle-do-montante -> flag
-                         ("31"))))            ; ("31") = ("31" . nil)
+          ("JUSANTE"  . ("30" . T)))          ; par  handle-do-destino -> flag
+                                              ; ("30") = ("30" . nil)
 ```
 
-O **flag** diz se o montante **contribui diretamente para o talvegue** do receptor (`T`, compartilha
-o talvegue) ou não (`nil` = ausente); ele decide entre somar ou tomar o máximo dos tempos (15.4). `MONTANTE` vale para **qualquer** objeto que recebe (sarjeta recebe bacia
-*e* sarjeta; bacia recebe bacia). Cada entrada é um par, então campos novos (ex.:
-fração do escoamento) podem virar sub-lista depois. Trocar o tipo do objeto (`OBJETO`)
-descarta `PARAMS` e, com ele, os montantes. Recadastrar a bacia (`BACIACAD`) preserva
-`MONTANTE` e só troca o `TALVEGUE`.
+O **flag** diz se a origem **contribui diretamente para o talvegue** do destino (`T`, compartilha
+o talvegue) ou não (`nil` = ausente); ele decide entre somar ou tomar o máximo dos tempos (15.4).
+`JUSANTE` vale para **qualquer** objeto que emite e o destino pode ser qualquer objeto que recebe
+(sarjeta recebe bacia *e* sarjeta; bacia recebe bacia). Como o valor é um par, a fração do
+escoamento (divisão de vazão, futura) pode virar um terceiro elemento ou uma lista de pares
+com soma 1. Trocar o tipo do objeto (`OBJETO`) descarta `PARAMS` e, com ele, o destino dele.
+Recadastrar a bacia (`BACIACAD`) preserva `JUSANTE` e só troca o `TALVEGUE`.
 
 Os dados vão para o **dicionário de extensão da entidade** e acompanham a
 entidade ao copiar, colar e salvar. Se a entidade **não aceitar** dados
@@ -565,19 +586,18 @@ chave `<chave>:<handle>`); a leitura procura nos dois lugares
 
 ### 15.3 Regras de integridade
 
-1. **Uma origem tem no máximo um destino.** Ligar de novo a outro destino
-   *move* a ligação: o plugin acrescenta no novo receptor e só então remove do
-   antigo; se a remoção falhar, o novo é desfeito (não fica nem duplicada nem
-   perdida).
+1. **Uma origem tem no máximo um destino**, garantido pela estrutura (`JUSANTE` é um par).
+   Ligar de novo a outro destino *substitui* o par numa gravação só; ao mesmo destino só
+   atualiza o flag.
 2. **Sem auto-ligação e sem ciclos**: o destino não pode estar a montante da origem.
 3. **Os tipos precisam permitir**: a origem `EMITE`, o destino `RECEBE` e a
    `REGRA` opcional de cada tipo (cada tipo só fala de si; ex.: "só bacias
    descarregam em bacias").
 4. **Remover o cadastro de um objeto** (`objeto.removido`) desfaz as ligações
    dele; o evento sai antes de apagar. O mesmo vale para a **bacia**: ao remover o
-   cadastro dela (botão da tabela de bacias), o plugin `bacia` emite
-   `bacia.removida` e `models/bacia` a traduz em `objeto.removido`, sem que a
-   bacia conheça o mecanismo de ligações.
+   cadastro dela (botão da tabela de bacias), `OBJ:Remover` emite
+   `objeto.removido` e roda o gancho `AO-REMOVER` do tipo (a bacia limpa o XData),
+   sem que a bacia conheça o mecanismo de ligações.
 5. **`VALIDARLIGACOES`** detecta e corrige:
 
 | Problema      | Causa típica                                                 | Correção                  |
@@ -657,7 +677,7 @@ deixa o receptor desatualizado até recalcular.
 montantes**, do mais a montante para jusante (`LIG:RecalcularMontantes`, ordem de `LIG:_Ordem`), com o
 mesmo método e TR, **sem perguntas**. Cada montante usa os parâmetros do último cálculo daquele
 método/TR (ou os padrões do projeto, se nunca foi calculado). Bacia: capacidade `RECALCULA`
-(`BAC:_ObjRecalcula`; atualiza o cadastro com `BAC:Obter`). Demais tipos: cálculo genérico
+(`BAC:_ObjRecalcula`; prepara com `BAC:Preparar`: relê o desenho e recalcula o tc). Demais tipos: cálculo genérico
 `LIG:CalcularCore`. Para no primeiro erro e diz qual objeto falhou.
 
 **Oferta de ligação ao criar.** Ao cadastrar um objeto **novo** (`OBJETO`, `<TIPO>CAD`, `BACIACAD`) o
@@ -703,7 +723,8 @@ Capacidades opcionais (todas opcionais; o que o tipo não declara, ninguém assu
 | ----------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `CADASTRAVEL`         | `nil`                                                                                     | não aparece em`OBJETO` (ex.: bacia)                                                            |
 | `DETECTA`             | `(fn en)` → T                                                                            | reconhece a entidade sem cadastro de objeto                                                       |
-| `ARMAZENAMENTO`       | alist`(("LER" . fn) ("GRAVAR" . fn) ("LISTAR" . fn) ("REINDEXAR" . fn) ("REMOVER" . fn))` | o tipo tem armazenamento próprio (adapter);**exige** as 5 operações (seção 18)         |
+| `ARMAZENAMENTO`       | alist`(("LER" . fn) ("GRAVAR" . fn) ("LISTAR" . fn) ("REINDEXAR" . fn) ("REMOVER" . fn))` | só para quem guarda **fora** da extensão da entidade; **exige** as 5 operações (seção 18). Bacia e sarjeta não usam |
+| `AO-REMOVER`          | `(fn en)`                                                                                 | limpeza própria; roda em `OBJ:Remover` depois de `objeto.removido` e antes de apagar o registro (a bacia limpa o XData) |
 | `CARACTERIZA`         | `(fn en)` → alist                                                                        | obtém do desenho o que vai em`CARACT` ao cadastrar (ex.: comprimento e declividade da sarjeta) |
 | `NOME-FN`, `RESUMO` | `(fn en)`                                                                                 | nome e linhas de texto nas tabelas                                                                |
 | `PADROES`             | `(fn en)` → alist                                                                        | padrões dos parâmetros ao cadastrar                                                             |
@@ -761,6 +782,10 @@ parte das ligações.
 
 ## 18. Interface padrão do objeto (portas e adapters)
 
+> **Atenção:** o campo `RESULT` descrito nesta seção e nas anteriores (grupos soltos `VAZAO`/`HIDRAULICA`/`HIDROGRAMAS`
+> com `METODO` + `TR`) é o formato **antigo**. O vigente é o **por cenário** (seção 18e): `RESULT` = lista de cenários
+> (`"TR25"`), cada um com os grupos do tipo (`TC`, `PRECIPITACAO`, `ENTRADA`, `VAZAO`, `HIDROGRAMA`, `ALTURA_LAMINA`...).
+
 Todo objeto que existe no desenho (bacia, sarjeta, trecho, estrutura, tubo e
 os que ainda vamos criar) guarda **o mesmo registro**, e o resto do sistema só
 conhece esse registro. É a ideia de *portas e adapters*: o registro padrão e as
@@ -776,7 +801,7 @@ evento ao remover). Nenhum tipo guarda uma estrutura diferente do registro.
  ("NOME"      . "S1")
  ("DESCRICAO" . "texto livre")
  ("PARAMS"    . (("TALVEGUE" . "2A")     ; só a bacia
-                   ("MONTANTE" . (("30" . T) ("31")))))  ; dicionário handle -> flag (seção 15.2)
+                   ("JUSANTE"  . ("30" . T))))             ; destino: handle -> flag (seção 15.2)
  ("ATRIB"     . (("SECAO" . 1) ("N" . 0.0)))
  ("CARACT"    . (("COMP" . 85.0) ("DECL" . 0.012)))
  ("RESULT"    . (("VAZAO" . ((("METODO" . "racional") ("TR" . 10.0) ("QP" . 0.42))))
@@ -791,13 +816,13 @@ Valores `nil` não são gravados, então um campo vazio simplesmente não aparec
 | Campo      | O que guarda                                                                                                                                                                                                                                                                                                               | Regra para decidir                                                                                              |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `TIPO`   | **que objeto é este**: id do tipo no catálogo `objeto-hidraulico` (`"bacia"`, `"sarjeta"`...)                                                                                                                                                                                                                | Obrigatório. É por ele que`OBJ:TipoDe` escolhe o tipo e o sistema despacha regras, cálculo e armazenamento |
-| `PARAMS` | **ligações com outros objetos**, necessárias para calcular ou extrair informação: `"TALVEGUE"` (só a bacia; componente dela) e `"MONTANTE"` (qualquer objeto que receba; dicionário handle → flag "contribui diretamente ao talvegue")                                                                                                                                                                                                 | Evitar. Só entra quando o objeto de fato depende de outro. É opcional: sem ligação, não existe             |
+| `PARAMS` | **ligações com outros objetos**, necessárias para calcular ou extrair informação: `"TALVEGUE"` (só a bacia; componente dela) e `"JUSANTE"` (qualquer objeto que emita; par handle do destino → flag "contribui diretamente ao talvegue"; os montantes são derivados)                                                                                                                                                                                                 | Evitar. Só entra quando o objeto de fato depende de outro. É opcional: sem ligação, não existe             |
 | `ATRIB`  | valores que**precisam ser definidos** pelo usuário e **não podem ser obtidos do desenho** (C, CN, seção, rugosidade)                                                                                                                                                                                       | Se o desenho não sabe responder, é`ATRIB`                                                                   |
 | `CARACT` | o que**pode ser obtido do objeto no desenho** (área, comprimento, desnível, declividade)                                                                                                                                                                                                                           | Mesmo que o usuário possa informar o valor, ele continua em`CARACT`                                          |
 | `RESULT` | **tudo que é calculado**: em **grupos com nome**: vazões (`"VAZAO"`), tempo de concentração (`"TC"`), hidrogramas (`"HIDROGRAMAS"`) e, na sarjeta, `"HIDRAULICA"` (lâmina, velocidade...). Os campos calculados ficam **planos** na entrada do grupo; não há lista genérica de cálculos | Se saiu de uma conta, é`RESULT`. Hidrogramas também ficam aqui                                              |
 
 Efeito buscado: **a forma de acessar resultados é igual para todos os objetos**
-(`OBJ:ResultDe`, `OBJ:GrupoDe`), seja bacia, sarjeta ou o que vier.
+(`OBJ:ResultDe`, `OBJ:ResultGrupoDe`), seja bacia, sarjeta ou o que vier.
 Uma entrada de grupo é `(("METODO" . id) ("TR" . anos) ("QP" . m3/s) ...)` com os
 campos calculados direto nela; uma nova com o mesmo `METODO` e `TR` substitui a anterior.
 
@@ -816,7 +841,7 @@ cálculo** (parâmetros do método) nem o argumento `params` de `OBJ:RegistrarTi
 | `OBJ:Registro en`                                         | registro completo, no formato padrão                                              |
 | `OBJ:NomeGravado`, `OBJ:DescricaoDe`                    | `NOME`, `DESCRICAO`                                                            |
 | `OBJ:ParamsDe`, `OBJ:AtribDe`, `OBJ:CaractDe`         | `PARAMS`, `ATRIB`, `CARACT`                                                  |
-| `OBJ:ResultDe`, `OBJ:GrupoDe en grupo`, `OBJ:VazaoDe` | `RESULT`, um grupo de `RESULT`, o grupo `"VAZAO"`                            |
+| `OBJ:ResultDe`, `OBJ:CenariosDe`, `OBJ:ResultGrupoDe en cenario grupo`, `OBJ:VazaoDe en cenario` | `RESULT` (todos os cenários), nomes dos cenários, os campos de um grupo num cenário, o grupo `"VAZAO"` |
 | `OBJ:Nome en`                                             | nome para exibir (o gravado ou o`NOME-FN` do tipo)                               |
 | `OBJ:GravarResultado en grupo entrada`                    | acrescenta/substitui uma entrada (mesmo`METODO` e `TR`) no grupo de `RESULT` |
 
@@ -853,7 +878,7 @@ Uso, sem saber o tipo: `OBJ:GravaRegistro id en reg`, `OBJ:ListaTipo id`,
 
 | Tipo          | Armazenamento                                                                                                                                    | `PARAMS`   | `ATRIB`        | `CARACT`                                 | `RESULT`                                                                                                                                                    |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ | ---------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bacia`     | próprio (`BAC:Ler`, `BAC:Gravar`, `BAC:Listar`, `BAC:Reindexar`, `BAC:Remover`): índice `HYDRO.BACIAS` e evento `bacia.removida` | `TALVEGUE` | `C`, `CN`    | `AREA`, `COMP`, `DESNIVEL`, `DECL` | `TC` (`MIN`, `ORIGEM`, `PARAMS`), `VAZAO`, `HIDROGRAMAS`, `SARJETAS`                                                                            |
+| `bacia`     | padrão (gancho `AO-REMOVER` limpa o XData) | `TALVEGUE` | `C`, `CN`    | `AREA`, `COMP`, `DESNIVEL`, `DECL` | `TC` (`MIN`, `ORIGEM`, `PARAMS`), `VAZAO`, `HIDROGRAMAS`, `SARJETAS`                                                                            |
 | `sarjeta`   | padrão                                                                                                                                          | —           | `SECAO`, `N` | `COMP`, `DECL` (via `CARACTERIZA`)   | `VAZAO` (vazão afluente) e `HIDRAULICA` (lâmina, largura, velocidade, área molhada, avisos). Hidrogramas da sarjeta: previsto, ainda não implementado |
 | `trecho`    | padrão                                                                                                                                          | —           | `DIAM`, `N`  | —                                         | `VAZAO`, `HIDRAULICA`                                                                                                                                     |
 | `estrutura` | padrão                                                                                                                                          | —           | `FUNCAO`       | —                                         | `VAZAO`, `HIDRAULICA`                                                                                                                                     |
@@ -867,9 +892,12 @@ Uso, sem saber o tipo: `OBJ:GravaRegistro id en reg`, `OBJ:ListaTipo id`,
    o que o usuário precisa informar vai em `ATRIB`; o que é calculado vai em
    `RESULT` (use `OBJ:GravarResultado`).
 3. Só use `PARAMS` se o objeto depende de **outro objeto** para calcular.
-4. Só declare `ARMAZENAMENTO` se o tipo precisar de gravação, índice ou remoção
-   próprios (como a bacia). Neste caso forneça as cinco operações; o registro
-   continua sendo o padrão.
+4. **Não declare `ARMAZENAMENTO`** só para ter índice, evento ou limpeza própria:
+   use os ganchos (`CARACTERIZA`, `AO-REMOVER`) e, se o tipo monta o próprio registro
+   (como a bacia, com talvegue e tc), termine em `OBJ:Salvar en tipo reg`, que grava
+   pelo contrato e emite `objeto.cadastrado`. Só quem guarda fora da extensão da
+   entidade fornece as cinco operações; o registro continua sendo o padrão.
+   Leitura tipada: `OBJ:RegistroDe en tipo` (nil se a entidade é de outro tipo).
 5. Uma entidade tem **um** registro `HYDRO-OBJ`, logo **um** tipo. Uma polilinha
    que já é bacia não pode ser também trecho.
 
@@ -885,17 +913,18 @@ houver desenhos antigos, será preciso um conversor separado.
 ### Comandos que todo modelo tem
 
 Cada arquivo de `plugins/models/` (exceto `objetos_tipos.lsp`, que reúne tipos básicos e usa os
-comandos genéricos abaixo) define **quatro comandos de linha de comando**, com o nome do arquivo em
+comandos genéricos abaixo) define **cinco comandos de linha de comando**, com o nome do arquivo em
 maiúsculas como prefixo (`verificar.py` confere):
 
 | Comando        | Faz                                                                                          | Fluxo genérico |
 |----------------|----------------------------------------------------------------------------------------------|----------------|
 | `<TIPO>CAD`    | cadastra **ou edita** (se a entidade já é do tipo, abre a edição dele)                       | `OPV:Cadastrar tipo` |
+| `<TIPO>EDITA`  | escolhe o objeto e **um campo** (ATRIB, vínculo de `PARAMS` ou CARACT manual); pergunta só ele (18d) | `OPV:EditaCampo tipo` |
 | `<TIPO>S`      | lista os cadastrados (nome, tipo, handle, afluentes, destino)                                | `OPV:Listar tipo` |
 | `<TIPO>INFO`   | mostra as informações de um objeto (`ToString`)                                              | `OPV:Info tipo` |
 | `<TIPO>ZOOM`   | procura por nome (ou parte) ou handle, dá zoom e seleciona; Enter lista tudo para escolher   | `OPV:Zoom tipo` |
 
-`BACIACAD/BACIAS/BACIAINFO/BACIAZOOM` e `SARJETACAD/SARJETAS/SARJETAINFO/SARJETAZOOM` seguem o padrão.
+`BACIACAD/BACIAEDITA/BACIAS/BACIAINFO/BACIAZOOM` e `SARJETACAD/SARJETAEDITA/SARJETAS/SARJETAINFO/SARJETAZOOM` seguem o padrão.
 O modelo só diz de que tipo é (`(OPV:Zoom "sarjeta")`); os fluxos estão em
 `views/objetos_padrao_view.lsp` (feature `objetos-padrao-view`) sobre as consultas puras de
 `plugins/objetos_padrao.lsp` (feature `objetos-padrao`, prefixo `OPD:`). `OBJ:CadastroInterativoTipo`
@@ -907,7 +936,7 @@ todos), `OBJETOINFO`, `OBJETOZOOM` (localiza qualquer objeto), `OBJETOREMOVER`, 
 ### Vínculos (`PARAMS`) e `OBJETOVINCULOS`
 
 `PARAMS` guarda ligações com **outras entidades** como `(chave . handle)` (ex.: `("TALVEGUE" . "2F")`);
-todo valor string de `PARAMS` é tratado como handle, e cada handle de `"MONTANTE"` também. `OBJETOVINCULOS` **realça e seleciona** as entidades
+todo valor string de `PARAMS` é tratado como handle, e o handle de `"JUSANTE"` também. `OBJETOVINCULOS` **realça e seleciona** as entidades
 citadas: sem seleção, todas as que algum objeto cita (os talvegues das bacias); com um objeto, ele, o que
 ele cita e quem o cita. Vínculos cujo alvo não existe são listados como `QUEBRADO` (corrija com `HYDROAUDIT`).
 Funções: `OPD:Referencias`, `OPD:Alvo`, `OPD:Vinculos`, `OPD:Referenciando`.
@@ -933,11 +962,14 @@ que dá erro não derruba as outras: vira `("ERRO-VERIFICACAO" mensagem)`.
 | Id              | Arquivo                  | Detecta                                                              | Correção |
 |-----------------|--------------------------|----------------------------------------------------------------------|----------|
 | `indice`        | `objetos_padrao.lsp`     | handles de `HYDRO.OBJETOS` inexistentes; objetos do desenho fora do índice | `OBJ:Reindexar` |
-| `params`        | `objetos_padrao.lsp`     | vínculo de `PARAMS` (exceto `MONTANTE`) para entidade apagada/inexistente | escolher outra entidade ou `[Remover]` o vínculo (Enter deixa como está) |
+| `params`        | `objetos_padrao.lsp`     | vínculo de `PARAMS` (exceto `JUSANTE`) para entidade apagada/inexistente | escolher outra entidade ou `[Remover]` o vínculo (Enter deixa como está) |
 | `tipo-ausente`  | `objetos_padrao.lsp`     | cadastro de um tipo que não está carregado                           | nenhuma (só informa; não apaga dados) |
 | `ligacoes`      | `ligacao.lsp`            | afluente apagado/sem tipo, origem em vários receptores, ciclo        | `LIG:Reparar` (ciclo: manual) |
 | `secao-atual`   | `secao.lsp`              | `HYDRO.SECAO.ATUAL` fora do cadastro                                 | usa a primeira seção |
 | `secao-sarjeta` | `models/sarjeta.lsp`     | sarjeta com `SECAO` inexistente                                      | escolhe uma seção para todas |
+| `secao-tubo`    | `models/tubo.lsp`        | tubo com `SECAO` inexistente                                         | escolhe uma seção para todos |
+| `tipo-estrutura`| `models/estrutura.lsp`   | estrutura com `TIPO-EST` inexistente                                 | escolhe um tipo para todas |
+| `secao-escada`  | `models/escada.lsp`      | escada com `SECAO` inexistente ou não retangular                     | escolhe uma seção retangular para todas |
 | `superficie`    | `auditoria.lsp`          | `HYDRO.SURFACE.HANDLE` aponta para entidade apagada                  | limpa o handle |
 
 `VALIDARLIGACOES` continua existindo (só ligações). Corrigir um vínculo ou uma seção **não recalcula**
@@ -948,11 +980,13 @@ nada: rode `CALCULAOBJETO` / `BACIA` depois.
 Para o Hydro não ficar "silencioso", dois elementos do desenho se **atualizam sozinhos** (plugin
 `etiqueta`, comandos em `views/etiqueta_view.lsp`). Não usam campos (`FIELD`) do AutoCAD, que não leem
 os dados do Hydro: o plugin reescreve o texto quando recebe os eventos `bacia.calculada`,
-`objeto.calculado`, `bacia.cadastrada`, `objeto.cadastrado`, `ligacao.criada` e `ligacao.removida`
+`objeto.calculado`, `objeto.cadastrado`, `ligacao.criada` e `ligacao.removida` (e, para o aviso de resultado desatualizado,
+`objeto.obsoleto` -> só as etiquetas do objeto, e `objetos.obsoletos` -> as tabelas, **uma vez** ao fim da cadeia)
 (todas as ações são protegidas: um erro na etiqueta nunca interrompe o cálculo).
 
 **Etiqueta** (`ETIQUETA`, `ETIQUETAEDITA`): MTEXT na camada `HYDRO-ETIQUETA` ligado ao objeto
-(chave `HYDRO-ETQ` na etiqueta: `ALVO` = handle, `MODO`, `MODELO`).
+(chave `HYDRO-ETQ` na etiqueta: `ALVO` = handle, `MODO`, `MODELO`, `CENARIO` opcional: fixa um cenário; sem ele,
+segue o cenário em uso e, se o objeto não o tem, o último calculado).
 
 | Modo       | Texto                                                                                         |
 |------------|-----------------------------------------------------------------------------------------------|
@@ -960,13 +994,15 @@ os dados do Hydro: o plugin reescreve o texto quando recebe os eventos `bacia.ca
 | `MODELO`   | **identificação / prancha**: texto seu com campos `{CAMPO}`, um modelo por etiqueta           |
 
 Campos (sem diferenciar maiúsculas; `?` se não existir): `{NOME} {TIPO} {HANDLE}`, `{AREA}` (ha),
-qualquer chave de `ATRIB` (`{C} {CN} {N}`), depois de `CARACT` (`{COMP} {DECL}`), depois do **último
-cálculo** (`{QP} {TR} {TC} {METODO}`, a saída), `{TCP}` (tc próprio), `{E.QP} {E.TC}` (entrada) e
-`{H.LAMINA} {H.VELOCIDADE} {H.PERCURSO}` (hidráulica). `\P` quebra a linha. Modelo padrão por tipo:
+`{CENARIO}`, qualquer chave de `ATRIB` (`{C} {CN} {N}`), depois de `CARACT` (`{COMP} {DECL}`), depois dos campos do
+**cenário** (`VAZAO`, `PRECIPITACAO`, `INPUT`) e **`{GRUPO.CAMPO}`** de qualquer grupo (`{VAZAO.VALOR}`, `{ENTRADA.TC}`,
+`{ALTURA_LAMINA}` = `{ALTURA_LAMINA.VALOR}`). Atalhos: `{QP}`=`VAZAO.VALOR`, `{TC}`=`VAZAO.TC` (saída), `{TCP}`=`TC.VALOR`,
+`{TR}`, `{METODO}`, `{E.QP} {E.TC}` (entrada), `{H.LAMINA} {H.VELOCIDADE} {H.LARGURA} {H.PERCURSO}`. Com resultado
+desatualizado o texto ganha "(resultado desatualizado)". `\P` quebra a linha. Modelo padrão por tipo:
 `HYDRO.ETIQUETA.MODELO.<tipo>` (o `ETIQUETAEDITA` pode gravar o modelo editado como padrão).
 
 **Tabela viva** (`TABELAVIVA`): objeto `TABLE` na camada `HYDRO-TABELA` (chave `HYDRO-TBL`) com
-todos os objetos: nome, tipo, A, L, S, atributos, TR, Q de entrada, Q de saída, tc e destino. Cada
+todos os objetos: nome, tipo, A, L, S, atributos, **cenário**, Q de entrada, Q de saída (`*` = desatualizado), tc e destino. Cada
 atualização refaz as linhas. `ATUALIZAETIQUETAS` força a atualização de tudo.
 
 **Limites:** mostram o que está **gravado**; mover a geometria sem recalcular não muda o resultado. A
@@ -996,3 +1032,173 @@ objeto continua funcionando com um único `.lsp`, e o botão dele é cadastrado 
 - **Regra do projeto:** todo comando novo ganha um botão (`python build/verificar.py` avisa quando falta).
 - Os comandos do fluxo antigo de sarjetas (`CALCULASARJETA`, `ATUALIZARUNOFF`...) não têm
   botão aqui porque `plugins/sarjetas.lsp` não está nesta árvore.
+
+## 18d. Esqueleto único: vínculos, CARACT manual e resultado desatualizado
+
+Plano e decisões: `docs/plano_esqueleto_unico.md`; exemplo comentado: `docs/objeto_generico.lsp`.
+Implementado em `plugins/objetos.lsp` (etapa 1; a bacia migra na etapa 3).
+
+- **Capacidades novas:** `"PARAMS-DEFS"` (`chave rotulo aceita [obrigatorio]`, entidades de apoio gravadas em
+  `PARAMS` como handles; `aceita` = nomes DXF e/ou ids de tipo) e `"CARACT-DEFS"` (formato de `ATRIB`; o que
+  o usuário digita quando o desenho não informa; chaves em `CARACT/MANUAL`). `"CARACTERIZA"` passa a ser
+  `(fn en vinculos)`, com `vinculos` = alist `(chave . ename)`.
+- **Funções:** `OBJ:CadastrarCom en tipo atrib nome vinculos manual` (`OBJ:Cadastrar` chama com nil nil),
+  `OBJ:CadastroInterativoTipo` pede os vínculos (`[Usar/Trocar/Remover]`) e os CARACT manuais,
+  `OBJ:EditaCampoInterativo` (comando `<TIPO>EDITA` via `OPV:EditaCampo`) altera um campo só.
+- **Obsoleto (por cenário, plano `docs/plano_resultados_cenarios.md`):** `("OBSOLETO" . T)` no grupo `"CENARIO"` de cada cenário do `RESULT`. `OBJ:Salvar` marca quando o objeto tinha `RESULT` e
+  `ATRIB`/`PARAMS`/`CARACT` mudaram (e mantém a marca existente); `OBJ:GravarResultado` dos grupos `VAZAO` e
+  `HIDRAULICA` (e a gravação de vazão da bacia) remove. Com `HYDRO.OBSOLETO.PROPAGA` = 1,
+  `OBJ:InvalidaJusante` segue `PARAMS/JUSANTE`, só gravando a marca (para ao achar um já obsoleto ou um ciclo).
+  Nenhum recálculo na edição. Evento `objeto.obsoleto` (`OBJETO`). Leitura: `OBJ:Obsoleto`.
+- **Reler o desenho ao calcular:** `LIG:CalcularCore` chama `OBJ:AtualizaCaract`: com `HYDRO.CARACT.AUTO` = 1 recaracteriza e regrava só o `CARACT` se mudou (manuais preservados; sem marcar obsoleto). A bacia faz o mesmo em `BAC:Preparar`.
+- `LIG:Conectar`/`LIG:Desconectar` (e, por eles, remover objeto) chamam `OBJ:Invalidar` no destino novo, no anterior e no destino perdido: marcam esses objetos e, só com `HYDRO.OBSOLETO.PROPAGA` = 1, a jusante deles. A origem não é marcada (a saída dela não mudou). Repetir a chamada é barato: ao achar objeto já obsoleto a cadeia para.
+
+## 18e. RESULT por cenário (em implantação)
+
+Plano e decisões: `docs/plano_resultados_cenarios.md`. **Etapa 1 feita** (núcleo em `plugins/objetos.lsp`);
+as etapas 2 a 5 migram `ligacao`, `sarjeta`, `bacia`, `hidrograma`, `etiqueta` e as tabelas. Até lá,
+quem ainda usa o formato antigo (grupos soltos com `METODO` + `TR`) **não funciona** com este núcleo.
+
+```
+("RESULT" . (("TR25" . (("CENARIO" ("TR" . 25.0) ["OBSOLETO" . T])
+                        ("TC" ("VALOR" . 15.0) ("METODO" . "kirpich"))
+                        ("VAZAO" ("VALOR" . 9.88) ("METODO" . "racional") ("INPUT" ...))))
+             ("TR10" . (...))))
+```
+
+| Função | Faz |
+|---|---|
+| `OBJ:CenarioPadrao tr` | `25.0` → `"TR25"`, `2.5` → `"TR2.5"` |
+| `OBJ:CenarioNome tr nome` | `"TR25"` ou, com nome, `"TR25-Nome"` |
+| `OBJ:CenarioAtual`, `OBJ:NomeCenario`, `OBJ:DefineNomeCenario nome` | cenário em uso = último TR + nome opcional (`HYDRO.CENARIO.NOME`); comando `CENARIO` (Enter = só o TR) |
+| `OBJ:GravarCalculo en cenario tr grupos` | grava um cálculo inteiro numa gravação só (TR, sem `OBSOLETO`, todos os grupos) |
+| `OBJ:CenariosDe en`, `OBJ:CenarioDe en cenario`, `OBJ:TrDoCenario en cenario` | leitura |
+| `OBJ:GravarResultado en cenario grupo campos` | grava/substitui o grupo (campos nil remove) |
+| `OBJ:DefineCenario en cenario tr` | cria o cenário com seu TR |
+| `OBJ:ConcluiCalculo en cenario` | remove `OBSOLETO` do cenário (quem calcula chama no fim) |
+| `OBJ:Obsoleto en cenario` | cenário marcado? (`nil` = algum) |
+| `OBJ:Invalidar en` | marca todos os cenários do objeto (+ jusante conforme `PROPAGAOBSOLETO`) |
+
+`OBJ:GravarResultado` **não** limpa mais o `OBSOLETO` sozinho; quem calcula usa `OBJ:GravarCalculo` (uma gravação, desempenho)
+ou `OBJ:ConcluiCalculo`.
+
+**Etapa 2 (ligação e sarjeta, feita):** `LIG:Saida/Entrada/VazaoMontante/CalcularCore/Recalcular/RecalcularMontantes`
+trabalham por cenário (`VAZAO-EM` agora `(fn en cenario tc)`, `RECALCULA` `(fn en cenario metodo tr)`). `CALCULA` do tipo devolve
+**grupos** `((grupo . campos) ...)` (sarjeta: `ALTURA_LAMINA`, `LARGURA_INUNDADA`, `AREA_MOLHADA`, `VELOCIDADE`, `PERCURSO`,
+`AVISOS`); `FORMATA` é `(fn en cenario)`. Core grava `ENTRADA` e `VAZAO` (`VALOR`, `TC`, `METODO`, `VALOR-CALC`, `PRESERVADA`,
+`VOLUME`, `INPUT`). Etiqueta e tabelas ainda no formato antigo (etapa 5).
+
+**Etapa 3 (bacia, feita):** `BAC:_CalcularEGravar` grava o cenário numa gravação só: `TC` (`VALOR`, `METODO`, `INPUT`),
+`PRECIPITACAO` (`VALOR` = P em mm, ou I em mm/h, `UNIDADE`, `I`, `P`, `PE`), `ENTRADA` (só com montantes) e `VAZAO`
+(`VALOR`, `TC`, `METODO`, `DUR`, `VOLUME`, `QP-PROPRIO`, `AREA-TOTAL`, `TC-PROPRIO`, `VALOR-CALC`, `PRESERVADA`, `INPUT`).
+`BAC:Preparar` não grava mais (devolve o contexto com o tc); `VAZAO-EM` e `RECALCULA` são por cenário. Para textos e
+menus há adaptadores no formato "plano" antigo: `BAC:Vazao dados` (lista, um por cenário), `BAC:CalcDe dados cenario`,
+`BAC:Tc`, `BAC:TcDeCenario`; puros e testados: `BAC:_Grupos` / `BAC:_CalcFlat`. `BAC:Hidrogramas` (hidrogramas planos, um por cenário).
+Funções puras (testadas): `OBJ:_ResultSetGrupo`, `OBJ:_ResultObsoleto`, `OBJ:_ObsoletoR`,
+`OBJ:_TodosObsoletosR`.
+
+**Etapa 4 (hidrograma, feita):** um hidrograma por cenário, no grupo `HIDROGRAMA` (`VALOR` = Qp, `TIPO`, `TP`, `TB`,
+`VOLUME`, `DUR`, `NOTA`, `INPUT`, `PONTOS`; `METODO` e `TR` não são copiados: vêm de `VAZAO` e `CENARIO`). O **tipo é
+definido na bacia** (`ATRIB` `HIDROGRAMA-TIPO`, `BACIAEDITA`); `HIDROGRAMA` gera o do cenário escolhido com o tipo da bacia
+(`HID:TipoDaBacia`), guarda com `HID:Armazenar en cenario hid` e emite `hidrograma.gerado` (agora com `CENARIO`). Recalcular a
+vazão do cenário **remove** o hidrograma dele (`BAC:_CalcularEGravar` grava `("HIDROGRAMA")` nil). Puros e testados:
+`HID:_Grupo` e `BAC:_HidFlat` (ida e volta). A propagação de hidrogramas pela rede (somar `PONTOS` na `ENTRADA`) fica para depois.
+
+**Etapa 5 (etiquetas e tabela, feita):** `ETQ:_CampoR` resolve os campos pelo cenário (lê o registro **uma vez** por etiqueta);
+`ETQ:_CenarioR` escolhe o cenário (o da etiqueta, o em uso ou o último); `ETQ:_GC` lê `GRUPO.CAMPO`. A tabela viva mostra o
+cenário e marca `*` o Q de saída desatualizado. Eventos novos `objeto.obsoleto` (um objeto) e `objetos.obsoletos` (fim da
+cadeia, para as tabelas). **Plano de resultados por cenário concluído** (etapas 1 a 5), só com análise estática.
+
+## 18f. Tubo / canal (`models/tubo.lsp`, tipo `tubo`)
+
+Aceita `LINE`, `LWPOLYLINE` e `POLYLINE` (3D). **Declividade = |cota inicial − cota final| / comprimento**: só os pontos
+inicial e final e o comprimento da entidade contam (vértices intermediários não). Linha 2D (cotas iguais) não tem
+declividade no desenho: ela é digitada (`CARACT-DEFS`, `TUBOEDITA`). O tubo **recebe e emite**, precisa de montante e
+o tempo de saída é `max tc dos montantes + percurso` (modo `percurso`).
+
+**Catálogo de seções** `HYDRO.SECOES.TUBO` (padrão: circular D=0.6, retangular 1x1, trapezoidal b=1, h=1, z=1.5), **gerenciado em `plugins/secao_tubo.lsp`** (como `secao.lsp` das sarjetas); o model só lê (`TUB:Secoes`):
+`(id ("forma" . "circular"|"retangular"|"trapezoidal") ("d"|"b" "h" "z") ("n" . manning))`. Comandos `CRIASECAOTUBO`,
+`EDITASECAOTUBO`, `REMOVESECAOTUBO` (recusa seção em uso e a última), `SECAOTUBO` (visualizador). `ATRIB`: `SECAO` (id) e `N` (0 = o da seção).
+
+**Visualizador** (`SECAOTUBO`, `views/secao_tubo_view.lsp`, DCL `resources/dcl/secao_tubo.dcl`, como o `SECAO` das sarjetas): lista as
+seções; desenha a seção em **forma real 1:1** (sem exagero vertical, para o círculo continuar círculo) com as cotas (`D`; `b`, `h`; `z`, `B`);
+`Escala comum a todas as seções` (lembrada em `HYDRO.SECAO.TUBO.COMUM`); campos **Q** e **S** → `TUB:Resolver` e desenho da
+lâmina d'água com `y`, enchimento, velocidade, Froude, área molhada, capacidade e avisos; **Último cálculo** (último tubo calculado,
+evento `objeto.calculado`: `HYDRO.ULTIMO.TUBO.*`); **Selecionar** (vira a seção atual) e **Inserir no desenho** (camada `HYDRO-SECAO`,
+`entmakex`, centro da base; lâmina em `CIRCLE`/`LWPOLYLINE`/`SOLID`).
+
+**Cálculo** (Manning, escoamento uniforme; Chow, *Open-Channel Hydraulics*, 1959): dada a vazão da `ENTRADA`, `TUB:Resolver`
+acha a altura `y` por bissecção. Circular: a vazão cresce até `y = 0.9382 D` e depois cai até a seção plena; acima da
+máxima não há lâmina livre (`y = D`, aviso de escoamento sob pressão). Retangular/trapezoidal: acima da capacidade em `y = h`,
+`y = h` (aviso). Grupos gravados no cenário: `ALTURA_LAMINA`, `AREA_MOLHADA`, `VELOCIDADE`, `RAZAO_ENCHIMENTO`, `FROUDE`,
+`CAPACIDADE` (seção cheia; `EXCEDIDA`), `PERCURSO`, `AVISOS`. **Faixa de validade:** `S > 0`, `n > 0`, `Q > 0`; Froude entre
+0.9 e 1.1 avisa regime instável; não há limites de velocidade nem de enchimento embutidos.
+
+Os tipos básicos `trecho` e `tubo-c3d` (`objetos_tipos.lsp`) continuam existindo, sem cálculo próprio; o `tubo` é o modelo
+completo (polilinhas/linhas). Nada foi executado no AutoCAD.
+
+## 18g. Estrutura (`models/estrutura.lsp`, tipo `estrutura`) — atomizada
+
+Modelo **único** para poço de visita, caixa, ala e boca de lobo; o que muda é o **tipo**, definido num catálogo gerenciado em
+arquivo próprio (`plugins/tipo_estrutura.lsp`, como `secao.lsp` das sarjetas), e a **classe** do tipo, que sabe calcular, cada
+uma em **seu arquivo** em `plugins/registry/` (aberto/fechado: classe nova = arquivo novo, sem alterar o model):
+
+| Peça | Arquivo | Papel |
+|---|---|---|
+| objeto | `models/estrutura.lsp` | `ATRIB` `TIPO-EST` e `QTD`; acha a classe do tipo e chama o `CALCULA`/`FORMATA` dela |
+| catálogo de tipos + registro de classes | `plugins/tipo_estrutura.lsp` | `TES:Adicionar/Editar/Remover/EmUso`, `TES:RegistrarClasse`, tipo atual, auditoria `tipo-estrutura-atual` |
+| classe `passagem` | `registry/estrutura_passagem.lsp` | poço, caixa, ala: repassa; perda de carga localizada `dH = K V²/(2g)` (V = maior velocidade dos tubos de montante; `K` do projetista) |
+| classe `boca-lobo` | `registry/estrutura_boca_lobo.lsp` | captação por método; aviso **"Boca de lobo afogada"**; não divide a vazão (a saída segue igual à entrada; o excedente fica em `PASSAGEM`) |
+| classe `dissipador` | `registry/estrutura_dissipador.lsp` | dissipador de energia: balanço de energia `E_in = y + V²/(2g)` (y, V dos montantes), `dE`, potência `9.81·Q·dE` (kW); `E_out` pelo método do tipo (`dissipacao.lsp`, hoje `informado`: eficiência 0 a 1) |
+| métodos de dissipação | `registry/dissipacao.lsp` | catálogo `metodo-dissipacao`; brecha para bacia USBR, impacto etc. (arquivo novo) |
+| métodos de captação | `registry/captacao.lsp` | catálogo `metodo-captacao`; hoje `unitaria` (`QCAP = QTD × cap`, proporcional) |
+
+**Tipo** = `(id ("nome" . txt) ("classe" . id) + campos da classe)`: passagem `("k" . K)`; boca de lobo `("metodo" . id)` e `("cap" . m3/s)`.
+Fábrica: Poço de visita, Caixa, Ala (K = 0) e Boca de lobo (**capacidade 0**: defina com `EDITATIPOESTRUTURA`).
+**Classe** = `(TES:RegistrarClasse id nome campos valida rotulo calcula formata)`; `campos` = `(chave rotulo padrao unidade [tipo [opcoes]])`
+perguntados pelo catálogo (`HYDRO:AskParams`; `opcoes` aceita símbolo de função para lista dinâmica); `calcula (en ctx tipo dados)` devolve
+grupos e recebe `ctx` com `"MONTANTES"` (`V`, `Y`). **Brecha para equações:** um método novo (vertedouro, orifício) é um arquivo novo que faz
+`(HYDRO:RegAdd "metodo-captacao" id (list ("NOME" ..) ("DESC" ..) ("FN" . 'fn)))`; `(fn ctx)` recebe `Q`, `QTD`, `LAMINA` (maior
+`ALTURA_LAMINA` dos montantes, ou nil) e `TIPO` e devolve `(("QCAP" . m3/s))`. Comandos do catálogo: `CRIATIPOESTRUTURA`,
+`EDITATIPOESTRUTURA`, `REMOVETIPOESTRUTURA` (recusa tipo em uso e o último), `TIPOESTRUTURA`. Nada foi executado no AutoCAD.
+
+## 18h. Escada hidráulica (`models/escada.lsp`, tipo `escada`)
+
+Objeto **linear** como o tubo e a sarjeta (`LINE`, `LWPOLYLINE`, `POLYLINE` 3D; só o ponto inicial, o final e o comprimento
+contam; linha 2D tem a declividade digitada). A largura da calha vem da **seção do catálogo de tubo/canal** (`SECAOTUBO`; hoje só
+**retangular**). `ATRIB`: `SECAO`, `DEGRAU` (altura **máxima** do degrau `h`) e `METODO-ESCADA` (`nenhum` ou um método do catálogo).
+
+**Calcula (consenso, sem equação de regime):** `NDEG = ceil(desnível/h)`; altura real `hr = desnível/NDEG`; `Lh = √(COMP² − desnível²)`;
+piso `l = Lh/NDEG`; inclinação `atan(hr/l)`; **altura crítica** retangular `yc = (q²/g)^(1/3)`, `q = Q/b` (Chow, 1959); razão `yc/hr`.
+Grupos: `ALTURA_CRITICA`, `DEGRAUS` (`VALOR` = NDEG, `ALTURA`, `PISO`, `INCLINACAO`), `YC_H`, `AVISOS`.
+
+**Método incluído `siscooh`** (`registry/escada_siscooh.lsp`, prefixo `ESS:`; referência `docs/referencia-escadas-hidraulicas-siscooh.md`,
+SisCCoH 1.1 seção 4.2): regime (nappe / transição / skimming, com subtipos), vazões limite, e conforme o regime: nappe (número de queda, `Ld`, `Lj`,
+parede, energia máxima e **residual** com ressalto completo ou parcial, dissipação, **estado final** lâmina/velocidade/Froude) ou skimming
+(`He`, atrito, energia residual, concentração de ar, altura aerada e do muro, início da aeração). Validade `0,05 ≤ S/l ≤ 1,43`; a transição e o nappe
+sem ressalto não têm energia residual (aviso). **Não implementado:** risco de cavitação (eq. 4.53 incompleta no manual). **Calibrados/deduzidos:**
+α = 0,54 da eq. 4.31 (calibrado no exemplo 4.2), eq. 4.27 (grafia duvidosa); confira os coeficientes nas fontes originais antes de projetar. Exemplos
+4.1, 4.2 e 4.3 do manual estão nos testes. O método devolve também `ALTURA_LAMINA`, `VELOCIDADE` e `FROUDE` (estado final), que um **dissipador a
+jusante** lê como montante.
+
+**Outros métodos** entram como arquivo novo no catálogo `metodo-escada`:
+`(HYDRO:RegAdd "metodo-escada" id (list ("NOME" ..) ("DESC" ..) ("FN" . 'fn)))`; `(fn ctx)` recebe `Q`, `B`, `YC`, `H`, `L`, `NDEG`,
+`TETA`, `YC-H`, `DESNIVEL`, `COMP` e devolve grupos (um `PERCURSO` define o tempo próprio, um `AVISOS` se junta ao da escada).
+Escolha: `ATRIB` `METODO-ESCADA`.
+
+## 18i. Dissipador de energia (classe `dissipador` da estrutura)
+
+Classe de estrutura (`registry/estrutura_dissipador.lsp`), criada como tipo no `CRIATIPOESTRUTURA`: o tipo guarda o **método** e os **parâmetros do
+método** (campos dinâmicos: o catálogo pergunta primeiro o método, depois `PARAMS` dele; `TES:ClasseExtra "CAMPOS-FN"`). Balanço de energia quando o
+método dá a energia de saída: `E_in = y + V²/(2g)` (y e V do montante, ou o `EIN` do método), `dE = E_in − E_out`, potência `9.81·Q·dE` (kW);
+os grupos do método (`GRUPOS`) são gravados junto. Catálogo `metodo-dissipacao` (cada método: `PARAMS`, `VALIDA`, `FN`):
+
+| Método | Arquivo | O que faz |
+|---|---|---|
+| `informado` | `registry/dissipacao.lsp` | `E_out = (1 − eficiência)·E_in` (eficiência 0 a 1 informada) |
+| `usbr` | `registry/dissipacao_usbr.lsp` (`DUS:`) | bacia por ressalto, tipos I a IV (Peterka 1984; SisCCoH 4.3): `V1`, `Fr1`, tipo, `D2`, comprimento, `dE`, velocidade de saída, borda livre e parede, `h3`/`h4` (tipo III). Campo `largura` (B); `D1` = lâmina do montante; `Fr1 ≥ 1,2`. Exemplo 4.6 nos testes |
+| `enrocamento` | `registry/dissipacao_enrocamento.lsp` (`DEN:`) | bacia em enrocamento (HEC-14; SisCCoH 4.4): `Dmin/Dmax`, `Co`, verificações `0,1 ≤ D50/ye ≤ 0,7` e `hs/D50 ≥ 2`, `Ls`, `LB`, `LA`, `WB`, espessuras, profundidade e velocidade de saída (eq. 4.68). Campos `largura`, `d50`, `tw`, `hs` (**entrada**: o manual não traz equação), `curva`, `talude`. Sem energia de saída. Exemplo 4.7 nos testes |
+
+Referência: `docs/referencia-dissipadores-siscooh.md`. **Não implementado:** dimensões dos blocos e soleira além de `h3`/`h4` (Peterka, não validadas no
+manual), geometria das bacias II e IV. A tabela de `Co` é de memória do HEC-14 (cobre `TW/ye ≤ 1,0`; acima, erro). O montante precisa informar
+`ALTURA_LAMINA` e `VELOCIDADE` (tubo, sarjeta ou escada com `siscooh`). Método novo = arquivo novo no catálogo.

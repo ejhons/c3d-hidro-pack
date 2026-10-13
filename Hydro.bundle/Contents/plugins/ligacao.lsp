@@ -6,25 +6,30 @@
 ;;; Qualquer entidade com tipo hidraulico (ver objetos.lsp) pode participar.
 ;;;
 ;;; ONDE FICA A INFORMACAO (decisao de projeto)
-;;;   O RECEPTOR guarda a lista de MONTANTES no PARAMS do registro padrao dele
-;;;   (docs/arquitetura.md secao 18), campo "MONTANTE":
+;;;   A ORIGEM guarda o seu unico DESTINO (JUSANTE) no PARAMS do registro padrao dela
+;;;   (docs/arquitetura.md secao 18), campo "JUSANTE", um par (handle-do-destino . flag):
 ;;;       ("PARAMS" . (("TALVEGUE" . "2F")            ; so a bacia: componente dela
-;;;                    ("MONTANTE" . (("30" . T)      ; dicionario handle -> flag
-;;;                                   ("31")))))       ; ("31") = ("31" . nil)
-;;;   flag T  = o montante CONTRIBUI DIRETAMENTE para o talvegue do receptor (descarrega
+;;;                    ("JUSANTE" . ("30" . T))))     ; ("30") = ("30" . nil)
+;;;   flag T  = a origem CONTRIBUI DIRETAMENTE para o talvegue do destino (descarrega
 ;;;             nele, ou seja, compartilha o talvegue); nil = nao contribui (ausente).
-;;;   Faz sentido para receptor que concentra (bacia). A ORIGEM nao guarda nada: o
-;;;   destino de uma origem e CALCULADO procurando quem a lista. TALVEGUE nao e montante
-;;;   (e parte da bacia) e continua em campo proprio.
+;;;   Faz sentido para destino que concentra (bacia). Como o campo e um unico par, uma
+;;;   origem NAO PODE ter dois destinos (a mesma agua nunca e contada duas vezes). O
+;;;   DESTINO nao guarda nada: seus montantes (afluentes) sao CALCULADOS varrendo quem
+;;;   o cita em JUSANTE (LIG:ListaMontante). TALVEGUE nao e montante (e parte da
+;;;   bacia) e continua em campo proprio.
 ;;;
 ;;; O OBJETO COMO MECANISMO: ENTRADA -> SAIDA
 ;;;   ENTRADA  vem dos montantes: vazao Q = soma das SAIDAS deles, tempo tc = maior tempo
-;;;            de saida (hidrograma: futuro). Grupo de RESULT "ENTRADA".
-;;;   SAIDA    vazao e tempo que o objeto entrega aos outros. Grupo "VAZAO".
+;;;            de saida (hidrograma: futuro). Grupo "ENTRADA" do CENARIO (RESULT).
+;;;   SAIDA    vazao e tempo que o objeto entrega aos outros. Grupo "VAZAO" do cenario:
+;;;            ("VALOR" . q) ("TC" . min) ("METODO" . id) ("VOLUME" . m3) ("INPUT" ...).
+;;;   CENARIO  tudo e por cenario (docs/plano_resultados_cenarios.md): calcular o cenario X
+;;;            de um objeto usa o cenario X dos montantes. O cenario nasce do TR ("TR25")
+;;;            e pode ter nome ("TR25-Nome"; comando CENARIO).
 ;;;   Bacia sem montante so tem SAIDA (propria). Estrutura/sarjeta precisa de montante: os
 ;;;   parametros de entrada (Q, tc) alimentam o dimensionamento/verificacao hidraulica.
-;;;   Os montantes devem estar calculados ANTES, com o mesmo METODO e TR (a saida deles e
-;;;   lida do RESULT, nao recalculada).
+;;;   Os montantes devem estar calculados ANTES, no mesmo CENARIO (a saida deles e lida do
+;;;   RESULT, nao recalculada; CALCULAOBJETO os recalcula antes, em ordem).
 ;;;
 ;;; TEMPO DE SAIDA (tc_k = tempo de saida do montante k; tp = tempo proprio)
 ;;;   concentracao (bacia, tp = tc dela): tc = max( tp ,
@@ -44,24 +49,22 @@
 ;;;   Q_saida = max( Q_entrada , Q_calc ); desligada, Q_saida = Q_calc.
 ;;;
 ;;; REGRAS DE INTEGRIDADE (aplicadas em LIG:Conectar)
-;;;   1. Uma origem tem NO MAXIMO UM destino. Ligar de novo a outro destino
-;;;      MOVE a ligacao (adiciona no novo e so entao remove do antigo; se a
-;;;      remocao falhar, o novo e desfeito). Ligar de novo ao mesmo destino
-;;;      so atualiza o flag.
+;;;   1. Uma origem tem NO MAXIMO UM destino (garantido pela estrutura: JUSANTE e um
+;;;      par). Ligar de novo a outro destino SUBSTITUI o par (uma gravacao so);
+;;;      ligar de novo ao mesmo destino so atualiza o flag.
 ;;;   2. Nao pode ligar a si mesma nem criar CICLO (o destino nao pode estar a
 ;;;      montante da origem).
 ;;;   3. Os tipos devem permitir: origem EMITE, destino RECEBE e as REGRAS
 ;;;      opcionais de cada tipo (que cada tipo define sobre si; ver objetos.lsp).
-;;;   4. Referencias a entidades apagadas, tipos que sumiram e origens listadas
-;;;      em mais de um receptor (ex.: receptor copiado e colado) sao detectados
-;;;      por VALIDARLIGACOES, que tambem corrige.
-;;;   Trocar o TIPO do objeto (OBJETO) descarta o PARAMS e, com ele, os montantes.
+;;;   4. Destinos apagados, tipos que sumiram e ciclos sao detectados por
+;;;      VALIDARLIGACOES, que tambem corrige (menos ciclos).
+;;;   Trocar o TIPO do objeto (OBJETO) descarta o PARAMS e, com ele, o destino dele.
 ;;;
 ;;; EVENTOS EMITIDOS
 ;;;   "ligacao.criada"   "ORIGEM" "DESTINO" (enames) "ANTERIOR" (ename ou nil)
 ;;;                      "COMPARTILHA" (T/nil: contribui ao talvegue)
 ;;;   "ligacao.removida" "ORIGEM" "DESTINO"
-;;;   "objeto.calculado" "OBJETO" "TIPO" "METODO" "TR" "RES"
+;;;   "objeto.calculado" "OBJETO" "TIPO" "CENARIO" "METODO" "TR" "RES" (grupos calculados)
 ;;; EVENTO ASSINADO
 ;;;   "objeto.removido" -> desfaz as ligacoes do objeto
 ;;;
@@ -75,58 +78,86 @@
 (vl-load-com)
 
 ;;; ------------------------------------------------------------
-;;; ARMAZENAMENTO NO RECEPTOR (PARAMS "MONTANTE")
+;;; ARMAZENAMENTO NA ORIGEM (PARAMS "JUSANTE")
 ;;; ------------------------------------------------------------
-;; Montantes do receptor: lista de (handle-da-origem . contribui-ao-talvegue).
+;; Destino da origem como gravado: (handle-do-destino . contribui-ao-talvegue) ou nil.
 ;; Um flag nil aparece como ("handle"), isto e, (cons "handle" nil).
-(defun LIG:ListaMontante (en)
-  (OBJ:_Val "MONTANTE" (OBJ:ParamsDe en))
+(defun LIG:JusanteDe (en)
+  (OBJ:_Val "JUSANTE" (OBJ:ParamsDe en))
 )
 
-;; funcoes puras sobre a lista de montantes
-(defun LIG:_HandlesDe (lista)
-  (mapcar 'car lista)
-)
-
-;; acrescenta o montante h ou, se ja existe, atualiza o flag (mantem a posicao)
-(defun LIG:_AddAfl (lista h flag / novo velho)
-  (setq novo (cons h (if flag T nil)))
-  (setq velho (assoc h lista))
-  (if velho
-    (subst novo velho lista)
-    (append lista (list novo))
-  )
-)
-
-(defun LIG:_RemAfl (lista h)
-  (vl-remove (assoc h lista) lista)
-)
-
-;; Grava a lista de montantes no PARAMS do receptor (lista vazia remove o campo)
+;; Grava o destino no PARAMS da origem (par nil remove o campo).
 ;; Retorna T ou nil (entidade sem cadastro de objeto ou gravacao falhou)
-(defun LIG:_Salvar (en lista / reg id params)
+(defun LIG:_Salvar (en par / reg id params)
   (setq reg (OBJ:Registro en))
   (setq id (OBJ:TipoDe en))
   (if (and reg id)
     (progn
-      (setq params (OBJ:_SetChave (OBJ:_Val "PARAMS" reg) "MONTANTE" lista))
+      (setq params (OBJ:_SetChave (OBJ:_Val "PARAMS" reg) "JUSANTE" par))
       (if (OBJ:GravaRegistro id en (OBJ:_SetChave reg "PARAMS" params)) T nil)
     )
     nil
   )
 )
 
+;; Todas as ligacoes do desenho: lista de (origem-h destino-h flag).
+;; Varre os objetos uma vez; as funcoes abaixo trabalham sobre esta lista.
+(defun LIG:Pares (/ out e j)
+  (foreach e (OBJ:Listar)
+    (setq j (LIG:JusanteDe e))
+    (if j
+      (setq out
+        (append out (list (list (HYDRO:Handle e) (car j) (if (cdr j) T nil)))))
+    )
+  )
+  out
+)
+
+;; PURA: mapa destino-h -> origens, lista de (destino-h origem-h ...)
+(defun LIG:_MapaAfl (pares / out p cel)
+  (foreach p pares
+    (setq cel (assoc (cadr p) out))
+    (if cel
+      (setq out (subst (append cel (list (car p))) cel out))
+      (setq out (append out (list (list (cadr p) (car p)))))
+    )
+  )
+  out
+)
+
+;; PURA: montantes de um destino, lista de (origem-h . contribui-ao-talvegue)
+(defun LIG:_AflDe (pares h / out p)
+  (foreach p pares
+    (if (equal (cadr p) h)
+      (setq out (append out (list (cons (car p) (caddr p)))))
+    )
+  )
+  out
+)
+
+;; funcao pura sobre a lista de montantes
+(defun LIG:_HandlesDe (lista)
+  (mapcar 'car lista)
+)
+
 ;;; ------------------------------------------------------------
 ;;; CONSULTAS
 ;;; ------------------------------------------------------------
-;; handles dos afluentes de um receptor (como gravados)
+;; Montantes do objeto: lista de (handle-da-origem . contribui-ao-talvegue),
+;; derivada de quem o cita em JUSANTE (varre o desenho).
+(defun LIG:ListaMontante (en)
+  (LIG:_AflDe (LIG:Pares) (HYDRO:Handle en))
+)
+
+;; handles dos afluentes de um receptor
 (defun LIG:AfluentesH (en)
   (LIG:_HandlesDe (LIG:ListaMontante en))
 )
 
 ;; T se o montante `origem` contribui diretamente para o talvegue de `receptor`
-(defun LIG:Compartilha (receptor origem)
-  (if (cdr (assoc (HYDRO:Handle origem) (LIG:ListaMontante receptor))) T nil)
+(defun LIG:Compartilha (receptor origem / j)
+  (setq j (LIG:JusanteDe origem))
+  (if (and j (equal (car j) (HYDRO:Handle receptor)) (cdr j)) T nil)
 )
 
 (defun LIG:_Existe (h / e)
@@ -143,40 +174,10 @@
   out
 )
 
-;; objetos do desenho que tem montantes (varre os objetos cadastrados)
-(defun LIG:Receptores (/ out e)
-  (foreach e (OBJ:Listar)
-    (if (LIG:ListaMontante e)
-      (setq out (append out (list e)))
-    )
-  )
-  out
-)
-
-;; receptores que listam a origem (normalmente 0 ou 1)
-(defun LIG:Destinos (origem / ho out r)
-  (setq ho (HYDRO:Handle origem))
-  (foreach r (LIG:Receptores)
-    (if (member ho (LIG:AfluentesH r))
-      (setq out (append out (list r)))
-    )
-  )
-  out
-)
-
-(defun LIG:Destino (origem)
-  (car (LIG:Destinos origem))
-)
-
-;; afluentes validos de um handle (usado nos percursos do grafo)
-(defun LIG:_AflValidosH (h / e out x)
-  (setq e (LIG:_Existe h))
-  (if e
-    (foreach x (LIG:AfluentesH e)
-      (if (LIG:_Existe x) (setq out (append out (list x))))
-    )
-  )
-  out
+;; destino da origem (ename) ou nil se nao tem ou foi apagado
+(defun LIG:Destino (origem / j)
+  (setq j (LIG:JusanteDe origem))
+  (if j (LIG:_Existe (car j)) nil)
 )
 
 ;; Percurso a montante sobre HANDLES (puro: afl-fn = funcao handle -> handles)
@@ -195,10 +196,13 @@
   (reverse visit)
 )
 
-;; Todos os objetos a montante (afluentes, afluentes dos afluentes...)
-(defun LIG:Montante (en / out h e)
-  (foreach h (LIG:_MontanteH (HYDRO:Handle en) 'LIG:_AflValidosH)
-    (setq e (handent h))
+;; Todos os objetos a montante (afluentes, afluentes dos afluentes...).
+;; Monta o mapa destino -> origens uma vez so.
+(defun LIG:Montante (en / mapa aflf out h e)
+  (setq mapa (LIG:_MapaAfl (LIG:Pares)))
+  (setq aflf (function (lambda (x) (cdr (assoc x mapa)))))
+  (foreach h (LIG:_MontanteH (HYDRO:Handle en) aflf)
+    (setq e (LIG:_Existe h))
     (if e (setq out (append out (list e))))
   )
   out
@@ -262,84 +266,71 @@
 ;;; LIGAR / DESLIGAR
 ;;; ------------------------------------------------------------
 ;; Retorna (("OK" . T) ("ANTERIOR" . ename)) ou (("ERRO" . motivo)).
-;; compartilha = T se a origem contribui diretamente para o talvegue do destino (flag do MONTANTE).
-;; Se a origem ja tinha outro destino, MOVE (adiciona no novo e remove do
-;; antigo; falhando a remocao, o novo e desfeito). Se ja estava neste destino,
-;; so atualiza o flag.
-(defun LIG:Conectar (origem destino compartilha /
-                     motivo ho ja flag antigos falha r gravou)
+;; Ligar muda a entrada do destino novo e do anterior: os dois ficam com o resultado
+;; desatualizado (OBJ:Invalidar; a marca segue a jusante so com HYDRO.OBSOLETO.PROPAGA).
+;; compartilha = T se a origem contribui diretamente para o talvegue do destino (flag do JUSANTE).
+;; O destino fica na propria origem (par unico): ligar a outro destino SUBSTITUI o
+;; par numa unica gravacao; ao mesmo destino so atualiza o flag.
+(defun LIG:Conectar (origem destino compartilha / motivo hd flag ja anterior)
   (setq motivo (LIG:MotivoRecusa origem destino))
-  (setq flag (if compartilha T nil))
   (if motivo
     (list (cons "ERRO" motivo))
     (progn
-      (setq ho (HYDRO:Handle origem))
-      (setq ja (assoc ho (LIG:ListaMontante destino)))
-      (setq antigos (vl-remove destino (LIG:Destinos origem)))
-      ;; 1) acrescenta (ou atualiza o flag) no novo receptor
-      (if (not (equal ja (cons ho flag)))
-        (if (LIG:_Salvar destino (LIG:_AddAfl (LIG:ListaMontante destino) ho flag))
-          (setq gravou T)
-          (setq falha "Nao foi possivel gravar a ligacao no destino.")
-        )
-      )
-      ;; 2) remove dos antigos
-      (if (not falha)
-        (foreach r antigos
-          (if (not falha)
-            (if (not (LIG:_Salvar r (LIG:_RemAfl (LIG:ListaMontante r) ho)))
-              (setq falha "Nao foi possivel remover a ligacao anterior.")
-            )
-          )
-        )
-      )
-      (if falha
-        (progn
-          ;; desfaz o passo 1
-          (if gravou
-            (LIG:_Salvar destino
-              (if ja
-                (LIG:_AddAfl (LIG:ListaMontante destino) ho (cdr ja))
-                (LIG:_RemAfl (LIG:ListaMontante destino) ho)))
-          )
-          (list (cons "ERRO" falha))
-        )
-        (progn
-          (if (or gravou antigos)
-            (HYDRO:Emit "ligacao.criada"
-              (list (cons "ORIGEM" origem)
-                    (cons "DESTINO" destino)
-                    (cons "ANTERIOR" (car antigos))
-                    (cons "COMPARTILHA" flag)))
-          )
-          (list (cons "OK" T) (cons "ANTERIOR" (car antigos)))
-        )
+      (setq hd (HYDRO:Handle destino))
+      (setq flag (if compartilha T nil))
+      (setq ja (LIG:JusanteDe origem))
+      (setq anterior
+        (if (and ja (not (equal (car ja) hd))) (LIG:_Existe (car ja)) nil))
+      (cond
+        ((equal ja (cons hd flag))
+          (list (cons "OK" T) (cons "ANTERIOR" nil)))
+        ((LIG:_Salvar origem (cons hd flag))
+          (OBJ:Invalidar destino)
+          (if anterior (OBJ:Invalidar anterior))
+          (HYDRO:Emit "ligacao.criada"
+            (list (cons "ORIGEM" origem)
+                  (cons "DESTINO" destino)
+                  (cons "ANTERIOR" anterior)
+                  (cons "COMPARTILHA" flag)))
+          (list (cons "OK" T) (cons "ANTERIOR" anterior)))
+        (T (list (cons "ERRO" "Nao foi possivel gravar a ligacao na origem.")))
       )
     )
   )
 )
 
-;; Tira a origem de todos os receptores que a listam. Retorna quantos.
-(defun LIG:Desconectar (origem / ho n r)
-  (setq ho (HYDRO:Handle origem))
-  (setq n 0)
-  (foreach r (LIG:Destinos origem)
-    (if (LIG:_Salvar r (LIG:_RemAfl (LIG:ListaMontante r) ho))
-      (progn
-        (setq n (1+ n))
-        (HYDRO:Emit "ligacao.removida"
-          (list (cons "ORIGEM" origem) (cons "DESTINO" r)))
+;; Tira o destino da origem. Retorna quantas ligacoes removeu (0 ou 1).
+(defun LIG:Desconectar (origem / destino)
+  (if (LIG:JusanteDe origem)
+    (progn
+      (setq destino (LIG:Destino origem))
+      (if (LIG:_Salvar origem nil)
+        (progn
+          ;; o destino perdeu um montante: resultado desatualizado
+          (if destino (OBJ:Invalidar destino))
+          (HYDRO:Emit "ligacao.removida"
+            (list (cons "ORIGEM" origem) (cons "DESTINO" destino)))
+          1
+        )
+        0
       )
     )
+    0
   )
-  n
 )
 
-;; Ao remover o cadastro de um objeto: desfaz as ligacoes dele
-(defun LIG:_OnObjetoRemovido (dados / en)
+;; Ao remover o cadastro de um objeto (evento emitido ANTES de apagar): desfaz o
+;; destino dele e o destino de quem descarrega nele.
+(defun LIG:_OnObjetoRemovido (dados / en h o)
   (setq en (cdr (assoc "OBJETO" dados)))
   (if en
-    (LIG:Desconectar en)
+    (progn
+      (LIG:Desconectar en)
+      (foreach h (LIG:AfluentesH en)
+        (setq o (LIG:_Existe h))
+        (if o (LIG:Desconectar o))
+      )
+    )
   )
 )
 
@@ -397,28 +388,31 @@
   )
 )
 
-;; Entrada gravada de um montante: o resultado de SAIDA (grupo VAZAO) de METODO e TR
-(defun LIG:Saida (en metodo tr / out r)
-  (foreach r (OBJ:GrupoDe en "VAZAO")
-    (if (and (equal (OBJ:_Val "METODO" r) metodo)
-             (equal (OBJ:_Val "TR" r) tr 1e-9))
-      (setq out r)
-    )
+;; Entrada gravada de um montante: o resultado de SAIDA (grupo VAZAO) do CENARIO,
+;; como (("QP" . q) ("TC" . min) ("VOLUME" ..) ("METODO" ..)), ou nil se nao calculado
+(defun LIG:Saida (en cenario / g)
+  (setq g (OBJ:ResultGrupoDe en cenario "VAZAO"))
+  (if (and g (OBJ:_Val "VALOR" g))
+    (OBJ:_Limpa
+      (list (cons "QP" (OBJ:_Val "VALOR" g))
+            (cons "TC" (OBJ:_Val "TC" g))
+            (cons "VOLUME" (OBJ:_Val "VOLUME" g))
+            (cons "METODO" (OBJ:_Val "METODO" g))))
+    nil
   )
-  out
 )
 
 ;; ENTRADA do objeto: o que chega dos montantes DIRETOS, lido da saida gravada deles.
 ;; Retorna (("QP" . soma|nil) ("TC" . maior tempo|nil)
 ;;          ("CHEGADAS" . ((tc . contribui) ...)) ("ORIGENS" . ((nome . q) ...))
 ;;          ("FALTAM" . (nomes de montantes sem calculo)) ("AREA" . m2))
-;; QP e TC ficam nil se algum montante nao tem saida para este METODO e TR.
-(defun LIG:Entrada (en metodo tr / total tc cheg origens faltam m e s c)
+;; QP e TC ficam nil se algum montante nao tem saida neste CENARIO.
+(defun LIG:Entrada (en cenario / total tc cheg origens faltam m e s c)
   (foreach m (LIG:ListaMontante en)
     (setq e (LIG:_Existe (car m)))
     (if e
       (progn
-        (setq s (LIG:Saida e metodo tr))
+        (setq s (LIG:Saida e cenario))
         (if (and s (OBJ:_Val "QP" s) (OBJ:_Val "TC" s))
           (progn
             (setq total (+ (if total total 0.0) (OBJ:_Val "QP" s)))
@@ -445,18 +439,19 @@
 )
 
 ;; Vazao dos objetos a montante (TODOS, transitivamente; NAO inclui o proprio)
-;; reavaliada com METODO e TR no tempo tc (capacidade "VAZAO-EM"); as vazoes somam.
+;; reavaliada no CENARIO (metodo e parametros do calculo gravado dele) no tempo tc
+;; (capacidade "VAZAO-EM", (fn en cenario tc)); as vazoes somam.
 ;; Retorna (("QP" . total|nil) ("VOLUME" . m3|nil) ("ORIGENS" . ((nome . q) ...))
-;;          ("FALTAM" . (nomes sem calculo para este metodo e TR))
+;;          ("FALTAM" . (nomes sem calculo neste cenario))
 ;;          ("AREA" . m2 contribuinte total a montante))
-(defun LIG:VazaoMontante (en metodo tr tc / total vol volok origens faltam e id fn r)
+(defun LIG:VazaoMontante (en cenario tc / total vol volok origens faltam e id fn r)
   (setq volok T)
   (foreach e (LIG:Montante en)
     (setq id (OBJ:TipoDe e))
     (setq fn (if id (OBJ:Cap id "VAZAO-EM") nil))
     (if fn
       (progn
-        (setq r (apply fn (list e metodo tr tc)))
+        (setq r (apply fn (list e cenario tc)))
         (if (and r (cdr (assoc "QP" r)))
           (progn
             (setq total (+ (if total total 0.0) (cdr (assoc "QP" r))))
@@ -544,61 +539,38 @@
 ;;; ------------------------------------------------------------
 ;;; VALIDACAO
 ;;; ------------------------------------------------------------
-;; Analise PURA. mapa = lista de (receptor-h . (origem-h ...));
+;; Analise PURA. pares = lista de (origem-h destino-h flag) (ver LIG:Pares);
 ;; existe-fn = funcao handle -> T/nil. Retorna lista de problemas:
-;;   ("PENDENTE" receptor origem)   origem apagada/inexistente
-;;   ("DUPLICADA" origem (receptor ...))  origem listada em mais de um receptor
-;;   ("CICLO" receptor)             receptor aparece a montante de si mesmo
-(defun LIG:_Analisa (mapa existe-fn / out par r o cont aflf)
-  (foreach par mapa
-    (foreach o (cdr par)
-      (if (not (apply existe-fn (list o)))
-        (setq out (append out (list (list "PENDENTE" (car par) o))))
-      )
-    )
-  )
-  ;; origens em mais de um receptor
-  (foreach par mapa
-    (foreach o (cdr par)
-      (if (not (assoc o cont))
-        (setq cont (append cont (list (cons o nil))))
-      )
-      (setq cont
-        (subst
-          (cons o (append (cdr (assoc o cont)) (list (car par))))
-          (assoc o cont)
-          cont))
-    )
-  )
-  (foreach par cont
-    (if (> (length (cdr par)) 1)
-      (setq out (append out (list (list "DUPLICADA" (car par) (cdr par)))))
+;;   ("PENDENTE" origem destino)   destino apagado/inexistente
+;;   ("CICLO" origem)              origem aparece a montante de si mesma
+;; (origem em dois destinos nao existe: JUSANTE e um par unico)
+(defun LIG:_Analisa (pares existe-fn / out p mapa aflf)
+  (foreach p pares
+    (if (not (apply existe-fn (list (cadr p))))
+      (setq out (append out (list (list "PENDENTE" (car p) (cadr p)))))
     )
   )
   ;; ciclos
+  (setq mapa (LIG:_MapaAfl pares))
   (setq aflf (function (lambda (h) (cdr (assoc h mapa)))))
-  (foreach par mapa
-    (if (member (car par) (LIG:_MontanteH (car par) aflf))
-      (setq out (append out (list (list "CICLO" (car par)))))
+  (foreach p pares
+    (if (member (car p) (LIG:_MontanteH (car p) aflf))
+      (setq out (append out (list (list "CICLO" (car p)))))
     )
   )
   out
 )
 
-;; Analisa o desenho. Acrescenta "SEM-TIPO": origem existe mas nao e mais
+;; Analisa o desenho. Acrescenta "SEM-TIPO": destino existe mas nao e mais
 ;; um objeto hidraulico (cadastro removido ou plugin do tipo ausente...).
 ;; Retorna lista de problemas (ver LIG:_Analisa).
-(defun LIG:Validar (/ mapa r problemas par o e)
-  (foreach r (LIG:Receptores)
-    (setq mapa (append mapa (list (cons (HYDRO:Handle r) (LIG:AfluentesH r)))))
-  )
-  (setq problemas (LIG:_Analisa mapa 'LIG:_Existe))
-  (foreach par mapa
-    (foreach o (cdr par)
-      (setq e (LIG:_Existe o))
-      (if (and e (not (OBJ:TipoDe e)))
-        (setq problemas (append problemas (list (list "SEM-TIPO" (car par) o))))
-      )
+(defun LIG:Validar (/ pares problemas p e)
+  (setq pares (LIG:Pares))
+  (setq problemas (LIG:_Analisa pares 'LIG:_Existe))
+  (foreach p pares
+    (setq e (LIG:_Existe (cadr p)))
+    (if (and e (not (OBJ:TipoDe e)))
+      (setq problemas (append problemas (list (list "SEM-TIPO" (car p) (cadr p)))))
     )
   )
   problemas
@@ -612,50 +584,32 @@
 (defun LIG:_TextoProblema (p)
   (cond
     ((equal (car p) "PENDENTE")
-      (strcat "Afluente apagado: " (nth 2 p) " listado em " (LIG:_NomeH (nth 1 p))))
+      (strcat "Destino apagado: " (nth 2 p) ", citado por " (LIG:_NomeH (nth 1 p))))
     ((equal (car p) "SEM-TIPO")
-      (strcat "Afluente sem tipo hidraulico: " (LIG:_NomeH (nth 2 p))
-              " listado em " (LIG:_NomeH (nth 1 p))))
-    ((equal (car p) "DUPLICADA")
-      (strcat "Origem em mais de um receptor: " (LIG:_NomeH (nth 1 p))
-              " listada em " (HYDRO:Join (mapcar 'LIG:_NomeH (nth 2 p)) ", ")))
+      (strcat "Destino sem tipo hidraulico: " (LIG:_NomeH (nth 2 p))
+              ", citado por " (LIG:_NomeH (nth 1 p))))
     ((equal (car p) "CICLO")
       (strcat "Ciclo de descarga passando por " (LIG:_NomeH (nth 1 p))))
     (T (vl-prin1-to-string p))
   )
 )
 
-;; remove a origem (handle) do receptor (handle)
-(defun LIG:_RemoveDe (receptor-h origem-h / r)
-  (setq r (LIG:_Existe receptor-h))
-  (if r
-    (LIG:_Salvar r (LIG:_RemAfl (LIG:ListaMontante r) origem-h))
+;; tira o destino da origem (handle)
+(defun LIG:_RemoveDe (origem-h / o)
+  (setq o (LIG:_Existe origem-h))
+  (if o
+    (LIG:_Salvar o nil)
     nil
   )
 )
 
-;; Corrige o que da para corrigir. Para DUPLICADA pergunta qual receptor
-;; mantem. CICLO nao tem correcao automatica. Retorna quantas correcoes.
-(defun LIG:Reparar (problemas / n p idx rs r)
+;; Corrige o que da para corrigir (destino apagado ou sem tipo: a origem fica sem
+;; destino). CICLO nao tem correcao automatica. Retorna quantas correcoes.
+(defun LIG:Reparar (problemas / n p)
   (setq n 0)
   (foreach p problemas
-    (cond
-      ((member (car p) '("PENDENTE" "SEM-TIPO"))
-        (if (LIG:_RemoveDe (nth 1 p) (nth 2 p)) (setq n (1+ n)))
-      )
-      ((equal (car p) "DUPLICADA")
-        (setq rs (nth 2 p))
-        (setq idx
-          (HYDRO:Escolher
-            (strcat "A origem " (LIG:_NomeH (nth 1 p)) " esta em varios receptores. Manter em:")
-            (mapcar 'LIG:_NomeH rs)
-            0))
-        (foreach r rs
-          (if (not (equal r (nth idx rs)))
-            (if (LIG:_RemoveDe r (nth 1 p)) (setq n (1+ n)))
-          )
-        )
-      )
+    (if (member (car p) '("PENDENTE" "SEM-TIPO"))
+      (if (LIG:_RemoveDe (nth 1 p)) (setq n (1+ n)))
     )
   )
   n
@@ -664,20 +618,26 @@
 (defun c:VALIDARLIGACOES (/ problemas op n p)
   (setq problemas (LIG:Validar))
   (if (not problemas)
-    (princ "\nLigacoes integras: nenhum problema encontrado.")
+    (princ "
+Ligacoes integras: nenhum problema encontrado.")
     (progn
-      (princ (strcat "\n" (itoa (length problemas)) " problema(s) encontrado(s):"))
+      (princ (strcat "
+" (itoa (length problemas)) " problema(s) encontrado(s):"))
       (foreach p problemas
-        (princ (strcat "\n  - " (LIG:_TextoProblema p)))
+        (princ (strcat "
+  - " (LIG:_TextoProblema p)))
       )
       (initget "Sim Nao")
-      (setq op (getkword "\nCorrigir o que for possivel? [Sim/Nao] <Nao>: "))
+      (setq op (getkword "
+Corrigir o que for possivel? [Sim/Nao] <Nao>: "))
       (if (equal op "Sim")
         (progn
           (setq n (LIG:Reparar problemas))
-          (princ (strcat "\n" (itoa n) " correcao(oes) aplicada(s)."))
+          (princ (strcat "
+" (itoa n) " correcao(oes) aplicada(s)."))
           (if (assoc "CICLO" problemas)
-            (princ "\nCiclos exigem decisao sua: use DESLIGAR em um dos objetos do ciclo.")
+            (princ "
+Ciclos exigem decisao sua: use DESLIGAR em um dos objetos do ciclo.")
           )
         )
       )
@@ -795,6 +755,10 @@
       (princ
         (strcat "\n" (itoa n) " ligacao(oes) criada(s) com destino em "
                 (OBJ:Nome destino) "."))
+      ;; mostra as ligacoes na tela (temporario: some com REDRAW/REGEN), se a view existe
+      (if (and (> n 0) (HYDRO:Has "ligacao-visual-view"))
+        (vl-catch-all-apply 'LVW:Mostra (list origens))
+      )
       (if falhas
         (alert (strcat "Nao foi possivel ligar:\n" (HYDRO:Join falhas "\n")))
       )
@@ -861,27 +825,21 @@
   )
 )
 
-;; linhas padrao de um resultado (quando o tipo nao define FORMATA)
-(defun LIG:_FormataPadrao (res / out p)
-  (foreach p res
-    (if (and (cdr p) (not (listp (cdr p))))
-      (setq out
-        (append out
-          (list (strcat (car p) ": " (OBJ:_FmtVal (cdr p))))))
+;; linhas padrao dos grupos calculados (quando o tipo nao define FORMATA): "GRUPO: valor"
+(defun LIG:_FormataPadrao (res / out g v)
+  (foreach g res
+    (setq v (OBJ:_Val "VALOR" (cdr g)))
+    (if (and v (not (listp v)))
+      (setq out (append out (list (strcat (car g) ": " (OBJ:_FmtVal v)))))
     )
   )
   out
 )
 
-;; Parametros do calculo da ULTIMA vez para METODO e TR (HIDRAULICA, "PARAMS");
+;; Parametros do calculo da ULTIMA vez neste CENARIO (grupo VAZAO, "INPUT");
 ;; se nunca foi calculado, os padroes (projeto > ultimo usado > padrao do tipo)
-(defun LIG:_ParamsAnteriores (en id metodo tr / out r)
-  (foreach r (OBJ:GrupoDe en "HIDRAULICA")
-    (if (and (equal (OBJ:_Val "METODO" r) metodo)
-             (equal (OBJ:_Val "TR" r) tr 1e-9))
-      (setq out (OBJ:_Val "PARAMS" r))
-    )
-  )
+(defun LIG:_ParamsAnteriores (en id cenario / out)
+  (setq out (OBJ:_Val "INPUT" (OBJ:ResultGrupoDe en cenario "VAZAO")))
   (if out
     out
     (HYDRO:ParamsPadrao (OBJ:Cap id "PARAMS-CALCULO") (strcat "HYDRO.OBJ." id ".calc.") nil)
@@ -890,16 +848,23 @@
 
 ;; Calculo SEM perguntas de um objeto que recebe (sarjeta, trecho, estrutura...):
 ;; le a ENTRADA dos montantes, aplica o CALCULA do tipo (se tiver), define a SAIDA
-;; (tempo e vazao com a flag de preservacao) e grava ENTRADA, VAZAO e HIDRAULICA.
+;; (tempo e vazao com a flag de preservacao) e grava, numa gravacao so (OBJ:GravarCalculo),
+;; os grupos ENTRADA e VAZAO e os que o CALCULA do tipo devolver.
+;;   cenario: nome do cenario ("TR25"); tr: o TR dele; metodo: chuva-vazao dos montantes
 ;;   params : parametros do calculo do tipo, ou nil para os anteriores/padroes
+;; CALCULA (fn en ctx params) devolve GRUPOS ((grupo . campos) ...) ou (("ERRO" . msg));
+;; um grupo "PERCURSO" ("VALOR" . min) define o tempo proprio (modo percurso).
+;; ctx = (("CENARIO" . n) ("TR" . x) ("METODO" . id) ("ENTRADA" ("QP" ..) ("TC" ..) ...))
 ;; Retorna (("OK" . T) ("ENTRADA" ..) ("RES" ..) ("COMP" ..) ("PR" ..) ("QS" . q)
 ;;          ("TCS" . min) ("PARAMS" ..)) ou (("ERRO" . msg)).
 ;; Os montantes precisam estar calculados (LIG:RecalcularMontantes faz isso).
-(defun LIG:CalcularCore (en metodo tr params /
-                         id tipo ent fn res tp tcs comp pr qs)
+(defun LIG:CalcularCore (en cenario metodo tr params /
+                         id tipo ent fn res tp tcs comp pr qs grupos)
   (setq id (OBJ:TipoDe en))
+  ;; o desenho pode ter mudado: recaracteriza (flag HYDRO.CARACT.AUTO) antes de calcular
+  (if id (OBJ:AtualizaCaract en))
   (setq tipo (if id (OBJ:TipoDados id) nil))
-  (setq ent (if id (LIG:Entrada en metodo tr) nil))
+  (setq ent (if id (LIG:Entrada en cenario) nil))
   (cond
     ((not id)
       (list (cons "ERRO" "Esta entidade nao e um objeto hidraulico. Use OBJETO.")))
@@ -909,65 +874,56 @@
     ((not (LIG:ListaMontante en))
       (list (cons "ERRO" "Este objeto nao tem montante. Ligue bacias ou outros objetos a ele (LIGAR).")))
     ((cdr (assoc "FALTAM" ent))
-      (list (cons "ERRO" (strcat "Montantes sem calculo para este metodo e TR: "
+      (list (cons "ERRO" (strcat "Montantes sem calculo no cenario " cenario ": "
                                  (HYDRO:Join (cdr (assoc "FALTAM" ent)) ", ")
                                  ". Calcule antes, de montante para jusante."))))
     ((not (cdr (assoc "QP" ent)))
       (list (cons "ERRO" "Nenhum montante valido: as entidades ligadas nao existem mais (rode HYDROAUDIT).")))
     (T
-      (if (not params) (setq params (LIG:_ParamsAnteriores en id metodo tr)))
-      ;; calculo proprio do tipo (usa a ENTRADA); sem ele o objeto so repassa
+      (if (not params) (setq params (LIG:_ParamsAnteriores en id cenario)))
+      ;; calculo proprio do tipo: devolve GRUPOS ((grupo . campos) ...); sem ele so repassa
       (setq fn (OBJ:Cap id "CALCULA"))
       (setq res
         (if fn
           (apply fn
             (list en
-                  (list (cons "TR" tr) (cons "METODO" metodo) (cons "VAZAO" ent))
+                  (list (cons "CENARIO" cenario) (cons "TR" tr) (cons "METODO" metodo)
+                        (cons "ENTRADA" ent))
                   params))
           nil))
       (if (assoc "ERRO" res)
         res
         (progn
           ;; SAIDA: tempo = regra do modo; vazao = precipitacao no maior tempo
-          (setq tp (cdr (assoc "PERCURSO" res)))
+          (setq tp (OBJ:_Val "VALOR" (OBJ:_Val "PERCURSO" res)))
           (if (not tp) (setq tp 0.0))
           (setq tcs (LIG:_TcPuro (LIG:_Modo en) tp (cdr (assoc "CHEGADAS" ent))))
-          (setq comp (LIG:VazaoMontante en metodo tr tcs))
+          (setq comp (LIG:VazaoMontante en cenario tcs))
           (setq pr
             (LIG:Preserva (cdr (assoc "QP" ent))
                           (cdr (assoc "QP" comp))
                           (LIG:PreservaAtiva)))
           (setq qs (car pr))
-          (OBJ:GravarResultado en "ENTRADA"
-            (OBJ:_Limpa
-              (list (cons "METODO" metodo)
-                    (cons "TR" tr)
-                    (cons "QP" (cdr (assoc "QP" ent)))
-                    (cons "TC" (cdr (assoc "TC" ent)))
-                    (cons "AREA" (cdr (assoc "AREA" ent))))))
-          (OBJ:GravarResultado en "VAZAO"
-            (OBJ:_Limpa
-              (list (cons "METODO" metodo)
-                    (cons "TR" tr)
-                    (cons "QP" qs)
-                    (cons "TC" tcs)
-                    (cons "QP-CALC" (cdr (assoc "QP" comp)))
-                    (cons "PRESERVADA" (cadr pr))
-                    (cons "VOLUME" (cdr (assoc "VOLUME" comp))))))
-          (if res
-            (OBJ:GravarResultado en "HIDRAULICA"
-              (OBJ:_Limpa
-                (append
-                  (list (cons "METODO" metodo)
-                        (cons "TR" tr)
-                        (cons "PARAMS" params))
-                  (vl-remove-if
-                    (function
-                      (lambda (x) (member (car x) '("METODO" "TR" "PARAMS"))))
-                    res))))
-          )
+          ;; uma gravacao so: ENTRADA, VAZAO (saida) e os grupos do tipo
+          (setq grupos
+            (append
+              (list
+                (cons "ENTRADA"
+                  (list (cons "VALOR" (cdr (assoc "QP" ent)))
+                        (cons "TC" (cdr (assoc "TC" ent)))
+                        (cons "AREA" (cdr (assoc "AREA" ent)))))
+                (cons "VAZAO"
+                  (list (cons "VALOR" qs)
+                        (cons "TC" tcs)
+                        (cons "METODO" metodo)
+                        (cons "VALOR-CALC" (cdr (assoc "QP" comp)))
+                        (cons "PRESERVADA" (cadr pr))
+                        (cons "VOLUME" (cdr (assoc "VOLUME" comp)))
+                        (cons "INPUT" params))))
+              res))
+          (OBJ:GravarCalculo en cenario tr grupos)
           (HYDRO:Emit "objeto.calculado"
-            (list (cons "OBJETO" en) (cons "TIPO" id)
+            (list (cons "OBJETO" en) (cons "TIPO" id) (cons "CENARIO" cenario)
                   (cons "METODO" metodo) (cons "TR" tr) (cons "RES" res)))
           (list (cons "OK" T) (cons "ENTRADA" ent) (cons "RES" res)
                 (cons "COMP" comp) (cons "PR" pr) (cons "QS" qs)
@@ -992,15 +948,15 @@
 )
 
 ;; Recalcula UM objeto sem perguntas. Retorna nil se deu certo, ou o texto do erro.
-;; Usa a capacidade "RECALCULA" do tipo; sem ela, o calculo generico (LIG:CalcularCore)
+;; Usa a capacidade "RECALCULA" do tipo, (fn en cenario metodo tr); sem ela, o calculo generico (LIG:CalcularCore)
 ;; com os parametros da ultima vez.
-(defun LIG:Recalcular (en metodo tr / id fn r)
+(defun LIG:Recalcular (en cenario metodo tr / id fn r)
   (setq id (OBJ:TipoDe en))
   (setq fn (if id (OBJ:Cap id "RECALCULA") nil))
   (cond
-    (fn (apply fn (list en metodo tr)))
+    (fn (apply fn (list en cenario metodo tr)))
     ((and id (cdr (assoc "RECEBE" (OBJ:TipoDados id))))
-      (setq r (LIG:CalcularCore en metodo tr nil))
+      (setq r (LIG:CalcularCore en cenario metodo tr nil))
       (if (assoc "ERRO" r) (cdr (assoc "ERRO" r)) nil)
     )
     (T "tipo sem calculo")
@@ -1008,13 +964,13 @@
 )
 
 ;; Recalcula TODOS os montantes de `en` (do mais a montante para jusante) com o
-;; METODO e TR dados. Para no primeiro erro. Retorna nil (ok) ou o texto do erro.
-(defun LIG:RecalcularMontantes (en metodo tr / e erro)
+;; CENARIO, METODO e TR dados. Para no primeiro erro. Retorna nil (ok) ou o texto do erro.
+(defun LIG:RecalcularMontantes (en cenario metodo tr / e erro)
   (foreach e (LIG:_Ordem en nil nil)
     (if (not erro)
       (progn
         (princ (strcat "\nRecalculando montante: " (OBJ:Nome e) " ..."))
-        (setq erro (LIG:Recalcular e metodo tr))
+        (setq erro (LIG:Recalcular e cenario metodo tr))
         (if erro (setq erro (strcat (OBJ:Nome e) ": " erro)))
       )
     )
@@ -1023,7 +979,7 @@
 )
 
 ;; Linhas de texto do resultado de LIG:CalcularCore
-(defun LIG:_LinhasCalculo (en id metodo tr r / ent comp pr res fn)
+(defun LIG:_LinhasCalculo (en id cenario metodo tr r / ent comp pr res fn)
   (setq ent (cdr (assoc "ENTRADA" r)))
   (setq comp (cdr (assoc "COMP" r)))
   (setq pr (cdr (assoc "PR" r)))
@@ -1031,7 +987,7 @@
   (setq fn (OBJ:Cap id "FORMATA"))
   (append
     (list (strcat "OBJETO " (OBJ:Nome en) "  (" (OBJ:_NomeTipo id) ")")
-          (strcat "TR " (HYDRO:FmtReal tr) " anos  |  "
+          (strcat "Cenario " cenario "  |  TR " (HYDRO:FmtReal tr) " anos  |  "
                   (cdr (assoc "NOME" (HYDRO:RegGet "metodo-chuva-vazao" metodo))))
           (strcat "ENTRADA: Q = " (rtos (cdr (assoc "QP" ent)) 2 3)
                   " m3/s   tc = " (rtos (cdr (assoc "TC" ent)) 2 1) " min   ("
@@ -1046,18 +1002,18 @@
     (OBJ:LinhasAtrib en)
     (OBJ:LinhaParams "Parametros do calculo" (cdr (assoc "PARAMS" r)))
     (if (cdr (assoc "FALTAM" comp))
-      (list (strcat "ATENCAO: sem calculo para este metodo/TR: "
+      (list (strcat "ATENCAO: sem calculo neste cenario: "
                     (HYDRO:Join (cdr (assoc "FALTAM" comp)) ", ")))
     )
     (if res
-      (if fn (apply fn (list res)) (LIG:_FormataPadrao res))
+      (if fn (apply fn (list en cenario)) (LIG:_FormataPadrao res))
       (list "(tipo sem calculo hidraulico: so repassa a vazao)"))
   )
 )
 
 ;; CALCULAOBJETO. Recalcula antes os montantes, pergunta TR, metodo e parametros
 ;; (nao pergunta nada no modo automatico, CALCAUTO) e mostra entrada e saida.
-(defun LIG:CalcularInterativo (en / id tipo tr metodo erro params r auto
+(defun LIG:CalcularInterativo (en / id tipo tr cenario metodo erro params r auto
                                     linhas op pt)
   (if en
     (progn
@@ -1080,23 +1036,26 @@
             ((not metodo) (alert "Nenhum metodo chuva-vazao cadastrado."))
             (T
               (HYDRO:Set "HYDRO.TR" tr)
+              ;; cenario = TR (+ nome dado em CENARIO): "TR25" ou "TR25-Nome"
+              (setq cenario (OBJ:CenarioNome tr (OBJ:NomeCenario)))
+              (princ (strcat "\nCenario: " cenario))
               ;; todos os montantes sao recalculados antes, em ordem
-              (setq erro (LIG:RecalcularMontantes en metodo tr))
+              (setq erro (LIG:RecalcularMontantes en cenario metodo tr))
               (if erro
                 (alert (strcat "Nao foi possivel recalcular os montantes:\n" erro))
                 (progn
                   (setq params
                     (if auto
-                      (LIG:_ParamsAnteriores en id metodo tr)
+                      (LIG:_ParamsAnteriores en id cenario)
                       (HYDRO:AskParams
                         (OBJ:Cap id "PARAMS-CALCULO")
                         (strcat "HYDRO.OBJ." id ".calc.")
-                        (LIG:_ParamsAnteriores en id metodo tr))))
-                  (setq r (LIG:CalcularCore en metodo tr params))
+                        (LIG:_ParamsAnteriores en id cenario))))
+                  (setq r (LIG:CalcularCore en cenario metodo tr params))
                   (if (assoc "ERRO" r)
                     (alert (strcat "Erro: " (cdr (assoc "ERRO" r))))
                     (progn
-                      (setq linhas (LIG:_LinhasCalculo en id metodo tr r))
+                      (setq linhas (LIG:_LinhasCalculo en id cenario metodo tr r))
                       (if auto
                         (foreach op linhas (princ (strcat "\n" op)))
                         (progn
@@ -1133,7 +1092,7 @@
 ;; ELE descarrega.
 (defun LIG:OferecerLigacao (en / id dados recebe emite ops op ss origens comp n r o)
   (setq id (OBJ:TipoDe en))
-  (if (and id (null (LIG:ListaMontante en)) (null (LIG:Destinos en)))
+  (if (and id (null (LIG:ListaMontante en)) (null (LIG:JusanteDe en)))
     (progn
       (setq dados (OBJ:TipoDados id))
       (setq recebe (cdr (assoc "RECEBE" dados)))

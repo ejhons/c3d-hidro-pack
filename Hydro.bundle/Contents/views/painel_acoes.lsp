@@ -21,13 +21,14 @@
 (PNL:Acao "idf.tr"          "Dados e IDF" 10 30 "Tempo de retorno"              "ATUALIZATR" '("idf-view"))
 
 ;;; ---- 20: Bacias
-(PNL:Acao "bacia.cadastrar" "Bacias" 20 10 "Cadastrar bacia"             "BACIACAD" '("bacia"))
+(PNL:Acao "bacia.cadastrar" "Bacias" 20 10 "Cadastrar bacia"             "BACIACAD" '("bacia" "objetos-padrao-view"))
+(PNL:Acao "bacia.edita"     "Bacias" 20 15 "Editar um campo da bacia"        "BACIAEDITA" '("bacia" "objetos-padrao-view"))
 (PNL:Acao "bacia.calcular"  "Bacias" 20 20 "Calcular vazao da bacia"     "BACIA" '("bacia"))
 (PNL:Acao "bacia.calctexto" "Bacias" 20 30 "Calcular e inserir texto"    "CRIARBACIARESULTADO" '("bacia-view"))
 (PNL:Acao "bacia.texto"     "Bacias" 20 40 "Inserir texto de resultado"  "TEXTOBACIA" '("bacia-view"))
-(PNL:Acao "bacia.info"      "Bacias" 20 50 "Dados da bacia"              "BACIAINFO" '("bacia"))
+(PNL:Acao "bacia.info"      "Bacias" 20 50 "Dados da bacia"              "BACIAINFO" '("bacia" "objetos-padrao-view"))
 (PNL:Acao "bacia.zoom"      "Bacias" 20 55 "Localizar bacia (zoom)"      "BACIAZOOM" '("bacia" "objetos-padrao-view"))
-(PNL:Acao "bacia.lista"     "Bacias" 20 60 "Listar bacias (texto)"       "BACIAS" '("bacia"))
+(PNL:Acao "bacia.lista"     "Bacias" 20 60 "Listar bacias (texto)"       "BACIAS" '("bacia" "objetos-padrao-view"))
 (PNL:Acao "bacia.tabela"    "Bacias" 20 70 "Tabela de bacias"            "BACIATABELA" '("bacia-tabela"))
 
 ;;; ---- 30: Hidrogramas
@@ -42,17 +43,51 @@
 (PNL:Acao "lig.ligar"       "Objetos e ligacoes" 40 30 "Ligar (origem -> destino)"    "LIGAR" '("ligacao"))
 (PNL:Acao "lig.desligar"    "Objetos e ligacoes" 40 40 "Desligar origem"              "DESLIGAR" '("ligacao"))
 (PNL:Acao "obj.calcular"    "Objetos e ligacoes" 40 50 "Calcular objeto"              "CALCULAOBJETO" '("ligacao"))
+(PNL:Acao "lig.ver"        "Objetos e ligacoes" 40 65 "Mostrar ligacoes na tela (temporario)" "LIGACOESVER" '("ligacao-visual-view"))
 (PNL:Acao "lig.tabela"      "Objetos e ligacoes" 40 60 "Tabela de objetos e ligacoes" "LIGACOES" '("objetos-tabela"))
 (PNL:Acao "lig.validar"     "Objetos e ligacoes" 40 70 "Validar ligacoes"             "VALIDARLIGACOES" '("ligacao"))
 (PNL:Acao "obj.vinculos"    "Objetos e ligacoes" 40 75 "Realcar vinculos (talvegue...)" "OBJETOVINCULOS" '("objetos-padrao-view"))
 (PNL:Acao "obj.preserva"    "Objetos e ligacoes" 40 78 "Preservar maior vazao (entrada/saida)" "PRESERVAVAZAO" '("ligacao"))
-(PNL:Acao "obj.remover"     "Objetos e ligacoes" 40 80 "Remover cadastro de objeto"   "OBJETOREMOVER" '("objetos"))
+(PNL:Acao "obj.cenario"     "Objetos e ligacoes" 40 76 "Nome do cenario (TR25-Nome)"  "CENARIO" '("objetos"))
+(PNL:Acao "obj.propaga"     "Objetos e ligacoes" 40 79 "Propagar resultado desatualizado (jusante)" "PROPAGAOBSOLETO" '("objetos"))
+(PNL:Acao "obj.caractauto"  "Objetos e ligacoes" 40 77 "Reler o desenho ao calcular (liga/desliga)" "CARACTAUTO" '("objetos"))
+(PNL:Acao "obj.remover"    "Objetos e ligacoes" 40 80 "Remover cadastro de objeto"   "OBJETOREMOVER" '("objetos"))
 
 ;;; ---- 45: Sarjetas
 (PNL:Acao "sarjeta.cad"     "Sarjetas" 45 10 "Cadastrar / editar sarjeta"       "SARJETACAD" '("sarjeta-obj" "objetos-padrao-view"))
+(PNL:Acao "sarjeta.edita"   "Sarjetas" 45 15 "Editar um campo da sarjeta"         "SARJETAEDITA" '("sarjeta-obj" "objetos-padrao-view"))
 (PNL:Acao "sarjeta.lista"   "Sarjetas" 45 20 "Listar sarjetas"                  "SARJETAS" '("sarjeta-obj" "objetos-padrao-view"))
 (PNL:Acao "sarjeta.info"    "Sarjetas" 45 30 "Dados da sarjeta"                 "SARJETAINFO" '("sarjeta-obj" "objetos-padrao-view"))
 (PNL:Acao "sarjeta.zoom"    "Sarjetas" 45 40 "Localizar sarjeta (zoom)"         "SARJETAZOOM" '("sarjeta-obj" "objetos-padrao-view"))
+
+;;; ---- 46: Tubos e canais
+(PNL:Acao "tubo.cad"        "Tubos e canais" 46 10 "Cadastrar / editar tubo ou canal"   "TUBOCAD" '("tubo-obj" "objetos-padrao-view"))
+(PNL:Acao "tubo.edita"      "Tubos e canais" 46 15 "Editar um campo do tubo"            "TUBOEDITA" '("tubo-obj" "objetos-padrao-view"))
+(PNL:Acao "tubo.lista"      "Tubos e canais" 46 20 "Listar tubos e canais"              "TUBOS" '("tubo-obj" "objetos-padrao-view"))
+(PNL:Acao "tubo.info"       "Tubos e canais" 46 30 "Dados do tubo"                      "TUBOINFO" '("tubo-obj" "objetos-padrao-view"))
+(PNL:Acao "tubo.zoom"       "Tubos e canais" 46 40 "Localizar tubo (zoom)"              "TUBOZOOM" '("tubo-obj" "objetos-padrao-view"))
+(PNL:Acao "tubo.secao.cria" "Tubos e canais" 46 50 "Criar secao de tubo/canal"          "CRIASECAOTUBO" '("secao-tubo-view"))
+(PNL:Acao "tubo.secao.edita" "Tubos e canais" 46 60 "Editar secao de tubo/canal"        "EDITASECAOTUBO" '("secao-tubo-view"))
+(PNL:Acao "tubo.secao.remove" "Tubos e canais" 46 70 "Remover secao de tubo/canal"      "REMOVESECAOTUBO" '("secao-tubo-view"))
+(PNL:Acao "tubo.secao.lista" "Tubos e canais" 46 80 "Visualizar secoes de tubo/canal"     "SECAOTUBO" '("secao-tubo-view"))
+
+;;; ---- 47: Estruturas
+(PNL:Acao "est.cad"         "Estruturas" 47 10 "Cadastrar / editar estrutura"          "ESTRUTURACAD" '("estrutura-obj" "objetos-padrao-view"))
+(PNL:Acao "est.edita"       "Estruturas" 47 15 "Editar um campo da estrutura"          "ESTRUTURAEDITA" '("estrutura-obj" "objetos-padrao-view"))
+(PNL:Acao "est.lista"       "Estruturas" 47 20 "Listar estruturas"                     "ESTRUTURAS" '("estrutura-obj" "objetos-padrao-view"))
+(PNL:Acao "est.info"        "Estruturas" 47 30 "Dados da estrutura"                    "ESTRUTURAINFO" '("estrutura-obj" "objetos-padrao-view"))
+(PNL:Acao "est.zoom"        "Estruturas" 47 40 "Localizar estrutura (zoom)"            "ESTRUTURAZOOM" '("estrutura-obj" "objetos-padrao-view"))
+(PNL:Acao "est.tipo.cria"   "Estruturas" 47 50 "Criar tipo de estrutura"               "CRIATIPOESTRUTURA" '("tipo-estrutura-view"))
+(PNL:Acao "est.tipo.edita"  "Estruturas" 47 60 "Editar tipo de estrutura"              "EDITATIPOESTRUTURA" '("tipo-estrutura-view"))
+(PNL:Acao "est.tipo.remove" "Estruturas" 47 70 "Remover tipo de estrutura"             "REMOVETIPOESTRUTURA" '("tipo-estrutura-view"))
+(PNL:Acao "est.tipo.lista"  "Estruturas" 47 80 "Listar tipos e escolher o atual"       "TIPOESTRUTURA" '("tipo-estrutura-view"))
+
+;;; ---- 48: Escadas hidraulicas
+(PNL:Acao "escada.cad"      "Escadas hidraulicas" 48 10 "Cadastrar / editar escada hidraulica"  "ESCADACAD" '("escada-obj" "objetos-padrao-view"))
+(PNL:Acao "escada.edita"    "Escadas hidraulicas" 48 15 "Editar um campo da escada"             "ESCADAEDITA" '("escada-obj" "objetos-padrao-view"))
+(PNL:Acao "escada.lista"    "Escadas hidraulicas" 48 20 "Listar escadas hidraulicas"            "ESCADAS" '("escada-obj" "objetos-padrao-view"))
+(PNL:Acao "escada.info"     "Escadas hidraulicas" 48 30 "Dados da escada"                       "ESCADAINFO" '("escada-obj" "objetos-padrao-view"))
+(PNL:Acao "escada.zoom"     "Escadas hidraulicas" 48 40 "Localizar escada (zoom)"               "ESCADAZOOM" '("escada-obj" "objetos-padrao-view"))
 
 ;;; ---- 50: Secoes
 (PNL:Acao "secao.criar"     "Secoes" 50 10 "Criar secao de sarjeta"                 "CRIASECAO" '("secao-view"))
