@@ -120,6 +120,7 @@ Fonte da verdade da arquitetura, dos contratos e dos formatos de dados:
 - Handles são **strings**; `handent` pode devolver ename de entidade apagada.
 - Imagens de DCL só têm `vector_image` e `fill_image`; texto em imagem usa a fonte de traços
   do core (`HYDRO:ImgTexto`).
+- **Publico x privado:** o plugin e o prefixo (`BAC:`, `OBJ:`...), que pode ocupar varios arquivos (model + view). Nome com `_` depois do prefixo (`OBJ:_X`) e privado e so aparece nos arquivos que definem esse prefixo; se outro arquivo precisa, tire o `_`. Confira com `python tools/hydro_lint.py Hydro.bundle` (roda dentro do `verificar.py`; sem `--strict`).
 - Nada de `COMMAND` quando houver alternativa (`entmakex`, `vla-*`, `vlax-curve-*`).
 - Arquivos novos em ASCII puro. Não use `*load-truename*` (não existe em AutoLISP).
 - Nenhum módulo pode executar, no momento do load, algo que dependa de outro plugin

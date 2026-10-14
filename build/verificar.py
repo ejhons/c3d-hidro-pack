@@ -18,6 +18,7 @@ Confere:
      como grupo de RESULT e sem armazenamento proprio (herdam de objetos.lsp) (ver .claude/skills/hydro-model)
   9. (AVISO, nao erro) comandos c:XXX sem botao no painel (PNL:Acao)
  10. icones: o padrao (_padrao_16/24) deve existir (erro); acao/grupo sem icone (aviso)
+ 11. fronteira publico/privado entre plugins (tools/hydro_lint.py, modo padrao)
 """
 import glob
 import os
@@ -237,6 +238,17 @@ def main():
         if not any(os.path.exists(os.path.join(pasta, '_grupo_%s_%d.%s' % (og, t, e)))
                    for t in (16, 24) for e in ('bmp', 'png')):
             print('  AVISO: grupo de ordem %s sem icone de grupo' % og)
+
+    print('[11/11] fronteira publico/privado (tools/hydro_lint.py)')
+    lint = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'tools', 'hydro_lint.py')
+    if os.path.exists(lint):
+        import subprocess
+        r = subprocess.run([sys.executable, lint, 'Hydro.bundle'], capture_output=True, text=True)
+        if r.returncode != 0:
+            print(r.stdout)
+            erro('hydro_lint.py encontrou uso de funcao privada (_) fora do plugin dono')
+    else:
+        print('  AVISO: tools/hydro_lint.py nao encontrado')
 
     print()
     if problemas:
