@@ -61,7 +61,7 @@
 )
 
 (defun OPD:Linha (en)
-  (strcat (OBJ:Nome en) "  [" (OBJ:_NomeTipo (OBJ:TipoDe en)) "]  " (HYDRO:Handle en))
+  (strcat (OBJ:Nome en) "  [" (OBJ:NomeTipo (OBJ:TipoDe en)) "]  " (HYDRO:Handle en))
 )
 
 ;;; ------------------------------------------------------------
@@ -210,7 +210,7 @@
               (if (equal sel "Remover")
                 (vl-remove (assoc chave params) params)
                 (subst (cons chave (HYDRO:Handle (car sel))) (assoc chave params) params)))
-            (if (OBJ:GravaRegistro (OBJ:TipoDe en) en (OBJ:_SetChave reg "PARAMS" params))
+            (if (OBJ:GravaRegistro (OBJ:TipoDe en) en (OBJ:SetChave reg "PARAMS" params))
               (setq n (1+ n))
             )
           )

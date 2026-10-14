@@ -121,7 +121,7 @@
       (vl-catch-all-apply 'SOB:_Desnivel (list en (SOB:Superficie)))
       nil))
   (if (vl-catch-all-error-p desn) (setq desn nil))
-  (OBJ:_Limpa
+  (OBJ:Limpa
     (list
       (cons "COMP" (if (and comp (> comp 0.0)) comp nil))
       (cons "DECL" (if (and comp desn (> comp 0.0)) (/ (abs desn) comp) nil))
@@ -442,7 +442,7 @@
   (foreach p problemas
     (setq en (nth 1 p))
     (if (OBJ:Cadastrar en "sarjeta"
-          (OBJ:_SetChave (OBJ:AtribDe en) "SECAO" id)
+          (OBJ:SetChave (OBJ:AtribDe en) "SECAO" id)
           (OBJ:NomeGravado en))
       (setq n (1+ n))
     )

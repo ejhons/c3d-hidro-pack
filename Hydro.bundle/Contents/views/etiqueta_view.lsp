@@ -97,7 +97,7 @@
         ((and atual (/= atual "")) (setq cen atual))
       )
       (HYDRO:DadoGravar lab "HYDRO-ETQ"
-        (OBJ:_Limpa
+        (OBJ:Limpa
           (list (cons "VERSAO" 1)
                 (cons "ALVO" alvo)
                 (cons "MODO" (if (equal op "Modelo") "MODELO" "FIXO"))

@@ -93,8 +93,8 @@
   (setq id (OBJ:TipoDe en))
   (if (and reg id)
     (progn
-      (setq params (OBJ:_SetChave (HYDRO:Val "PARAMS" reg) "JUSANTE" par))
-      (if (OBJ:GravaRegistro id en (OBJ:_SetChave reg "PARAMS" params)) T nil)
+      (setq params (OBJ:SetChave (HYDRO:Val "PARAMS" reg) "JUSANTE" par))
+      (if (OBJ:GravaRegistro id en (OBJ:SetChave reg "PARAMS" params)) T nil)
     )
     nil
   )
@@ -249,9 +249,9 @@
         ((not to) "A origem nao e um objeto hidraulico (use OBJETO).")
         ((not td) "O destino nao e um objeto hidraulico (use OBJETO).")
         ((not (cdr (assoc "EMITE" dto)))
-          (strcat "Objetos do tipo '" (OBJ:_NomeTipo to) "' nao descarregam em outros."))
+          (strcat "Objetos do tipo '" (OBJ:NomeTipo to) "' nao descarregam em outros."))
         ((not (cdr (assoc "RECEBE" dtd)))
-          (strcat "Objetos do tipo '" (OBJ:_NomeTipo td) "' nao recebem afluentes."))
+          (strcat "Objetos do tipo '" (OBJ:NomeTipo td) "' nao recebem afluentes."))
         ((setq msg (LIG:_Regra dto to td)) msg)
         ((setq msg (LIG:_Regra dtd to td)) msg)
         ((member destino (LIG:Montante origem))
@@ -393,7 +393,7 @@
 (defun LIG:Saida (en cenario / g)
   (setq g (OBJ:ResultGrupoDe en cenario "VAZAO"))
   (if (and g (HYDRO:Val "VALOR" g))
-    (OBJ:_Limpa
+    (OBJ:Limpa
       (list (cons "QP" (HYDRO:Val "VALOR" g))
             (cons "TC" (HYDRO:Val "TC" g))
             (cons "VOLUME" (HYDRO:Val "VOLUME" g))
@@ -514,7 +514,7 @@
         (setq out
           (append out
             (list (strcat (LIG:_Indent nivel) "<- " (OBJ:Nome e)
-                          "  [" (OBJ:_NomeTipo (OBJ:TipoDe e)) "]"
+                          "  [" (OBJ:NomeTipo (OBJ:TipoDe e)) "]"
                           (if (cdr m) "  (contribui ao talvegue)" "")))
             (LIG:_Arvore e (1+ nivel) (cons e visit))))
       )
@@ -830,7 +830,7 @@ Ciclos exigem decisao sua: use DESLIGAR em um dos objetos do ciclo.")
   (foreach g res
     (setq v (HYDRO:Val "VALOR" (cdr g)))
     (if (and v (not (listp v)))
-      (setq out (append out (list (strcat (car g) ": " (OBJ:_FmtVal v)))))
+      (setq out (append out (list (strcat (car g) ": " (OBJ:FmtVal v)))))
     )
   )
   out
@@ -869,7 +869,7 @@ Ciclos exigem decisao sua: use DESLIGAR em um dos objetos do ciclo.")
     ((not id)
       (list (cons "ERRO" "Esta entidade nao e um objeto hidraulico. Use OBJETO.")))
     ((not (cdr (assoc "RECEBE" tipo)))
-      (list (cons "ERRO" (strcat "O tipo '" (OBJ:_NomeTipo id)
+      (list (cons "ERRO" (strcat "O tipo '" (OBJ:NomeTipo id)
                                  "' nao recebe montantes. Bacias: use BACIA."))))
     ((not (LIG:ListaMontante en))
       (list (cons "ERRO" "Este objeto nao tem montante. Ligue bacias ou outros objetos a ele (LIGAR).")))
@@ -986,7 +986,7 @@ Ciclos exigem decisao sua: use DESLIGAR em um dos objetos do ciclo.")
   (setq res (cdr (assoc "RES" r)))
   (setq fn (OBJ:Cap id "FORMATA"))
   (append
-    (list (strcat "OBJETO " (OBJ:Nome en) "  (" (OBJ:_NomeTipo id) ")")
+    (list (strcat "OBJETO " (OBJ:Nome en) "  (" (OBJ:NomeTipo id) ")")
           (strcat "Cenario " cenario "  |  TR " (HYDRO:FmtReal tr) " anos  |  "
                   (cdr (assoc "NOME" (HYDRO:RegGet "metodo-chuva-vazao" metodo))))
           (strcat "ENTRADA: Q = " (rtos (cdr (assoc "QP" ent)) 2 3)
@@ -1024,7 +1024,7 @@ Ciclos exigem decisao sua: use DESLIGAR em um dos objetos do ciclo.")
         ((not id)
           (alert "Esta entidade nao e um objeto hidraulico. Use OBJETO."))
         ((not (cdr (assoc "RECEBE" tipo)))
-          (alert (strcat "O tipo '" (OBJ:_NomeTipo id) "' nao recebe montantes. Bacias: use BACIA.")))
+          (alert (strcat "O tipo '" (OBJ:NomeTipo id) "' nao recebe montantes. Bacias: use BACIA.")))
         (T
           (setq tr
             (if (and auto (HYDRO:Get "HYDRO.TR" nil))

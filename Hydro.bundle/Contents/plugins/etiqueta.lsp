@@ -151,7 +151,7 @@
   (setq alias (cdr (assoc up (ETQ:_Aliases))))
   (cond
     ((equal up "NOME") (if (HYDRO:Val "NOME" reg) (HYDRO:Val "NOME" reg) (OBJ:Nome en)))
-    ((equal up "TIPO") (OBJ:_NomeTipo (HYDRO:Val "TIPO" reg)))
+    ((equal up "TIPO") (OBJ:NomeTipo (HYDRO:Val "TIPO" reg)))
     ((equal up "HANDLE") (if en (HYDRO:Handle en) nil))
     ((equal up "CENARIO") cen)
     ((equal up "AREA")
@@ -214,7 +214,7 @@
                      (function (lambda (n) (ETQ:_CampoR en reg n pref))))
     )
   )
-  (if (and cen (OBJ:_ObsoletoR (HYDRO:Val "RESULT" reg) cen))
+  (if (and cen (OBJ:ObsoletoR (HYDRO:Val "RESULT" reg) cen))
     (strcat txt "\\P(resultado desatualizado)")
     txt
   )
@@ -269,7 +269,7 @@
     (progn
       (vl-catch-all-apply 'vla-put-layer (list (vlax-ename->vla-object en) "HYDRO-ETIQUETA"))
       (HYDRO:DadoGravar en "HYDRO-ETQ"
-        (OBJ:_Limpa
+        (OBJ:Limpa
           (list (cons "VERSAO" 1)
                 (cons "ALVO" (HYDRO:Handle alvo))
                 (cons "MODO" modo)
@@ -336,11 +336,11 @@
     (setq atr (append atr (list (strcat (car p) "=" (ETQ:_Fmt (cdr p))))))
   )
   (setq obs
-    (OBJ:_ObsoletoR (HYDRO:Val "RESULT" reg)
+    (OBJ:ObsoletoR (HYDRO:Val "RESULT" reg)
                     (ETQ:_CenarioR (HYDRO:Val "RESULT" reg) nil)))
   (list
     (OBJ:Nome en)
-    (OBJ:_NomeTipo (HYDRO:Val "TIPO" reg))
+    (OBJ:NomeTipo (HYDRO:Val "TIPO" reg))
     (ETQ:_S (ETQ:_CampoR en reg "AREA" nil))
     (ETQ:_S (ETQ:_CampoR en reg "COMP" nil))
     (ETQ:_S (ETQ:_CampoR en reg "DECL" nil))

@@ -43,7 +43,7 @@ Exemplo comentado: `docs/objeto_generico.lsp`; plano e decisoes: `docs/plano_esq
    `CARACT-DEFS` (formato de `ATRIB`), `CARACTERIZA (en vinculos)`, `PADROES`; o fluxo e `OBJ:CadastroInterativoTipo`
    (comandos `<TIPO>CAD` e `<TIPO>EDITA` via `OPV:*`). Tipo de param `"opcoes"` aceita simbolo de funcao para lista dinamica.
 3. **Editar marca `OBSOLETO`**, nao recalcula (`OBJ:Salvar`); so `OBJ:GravarResultado` (VAZAO/HIDRAULICA) remove. Se o seu calculo
-   grava o registro por fora, remova a marca (`OBJ:_SetChave reg "OBSOLETO" nil`).
+   grava o registro por fora, remova a marca (`OBJ:SetChave reg "OBSOLETO" nil`).
 4. O calculo pode reler o desenho: `OBJ:AtualizaCaract` (flag `HYDRO.CARACT.AUTO`); a funcao de calculo le `CARACT`.
 
 ## RESULT: grupos com nome, campos planos

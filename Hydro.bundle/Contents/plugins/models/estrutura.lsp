@@ -292,7 +292,7 @@
   (setq n 0)
   (foreach p problemas
     (setq en (nth 1 p))
-    (if (OBJ:CadastrarCom en "estrutura" (OBJ:_SetChave (OBJ:AtribDe en) "TIPO-EST" id)
+    (if (OBJ:CadastrarCom en "estrutura" (OBJ:SetChave (OBJ:AtribDe en) "TIPO-EST" id)
           (OBJ:NomeGravado en) nil nil)
       (setq n (1+ n))
     )

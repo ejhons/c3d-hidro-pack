@@ -44,8 +44,8 @@
   (foreach p (OBJ:AtribDe en)
     (setq out
       (append out
-        (list (cons (strcat "Atrib: " (OBJ:_RotuloParam id (car p)))
-                    (if (numberp (cdr p)) (HYDRO:CsvNum (cdr p)) (OBJ:_FmtVal (cdr p)))))))
+        (list (cons (strcat "Atrib: " (OBJ:RotuloParam id (car p)))
+                    (if (numberp (cdr p)) (HYDRO:CsvNum (cdr p)) (OBJ:FmtVal (cdr p)))))))
   )
   out
 )
@@ -59,7 +59,7 @@
     (cons "LINHA"
       (strcat
         (OBT:_Trunc (OBJ:Nome en) 14) "\t"
-        (OBT:_Trunc (OBJ:_NomeTipo (OBJ:TipoDe en)) 12) "\t"
+        (OBT:_Trunc (OBJ:NomeTipo (OBJ:TipoDe en)) 12) "\t"
         (HYDRO:Handle en) "\t"
         (if destino (OBT:_Trunc (OBJ:Nome destino) 14) "-") "\t"
         (itoa afl) "\t"
@@ -68,11 +68,11 @@
     )
     (cons "DETALHE" (OBT:_Detalhe en))
     (cons "CSV"
-      (OBJ:_Limpa
+      (OBJ:Limpa
         (append
         (list
           (cons "Nome" (OBJ:Nome en))
-          (cons "Tipo" (OBJ:_NomeTipo (OBJ:TipoDe en)))
+          (cons "Tipo" (OBJ:NomeTipo (OBJ:TipoDe en)))
           (cons "Handle" (HYDRO:Handle en))
           (cons "Destino" (if destino (OBJ:Nome destino) nil))
           (cons "Afluentes" (itoa afl))

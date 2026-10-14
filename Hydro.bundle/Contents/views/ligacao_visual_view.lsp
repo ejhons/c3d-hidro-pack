@@ -50,7 +50,7 @@
 ;; entidade se for curva aberta, senao nil (contorno fechado, bloco, estrutura...)
 (defun LVW:_Curva (en / h talv)
   (setq h (cdr (assoc "TALVEGUE" (OBJ:ParamsDe en))))
-  (setq talv (if (and h (OBJ:_HandleOk h)) (handent h) nil))
+  (setq talv (if (and h (OBJ:HandleOk h)) (handent h) nil))
   (cond
     (talv talv)
     ((LVW:_CurvaAberta en) en)

@@ -67,7 +67,7 @@
 (defun TES:ClasseExtra (id chave valor / cl)
   (setq cl (TES:Classe id))
   (if cl
-    (HYDRO:RegAdd "classe-estrutura" id (OBJ:_SetChave cl chave valor))
+    (HYDRO:RegAdd "classe-estrutura" id (OBJ:SetChave cl chave valor))
   )
   id
 )

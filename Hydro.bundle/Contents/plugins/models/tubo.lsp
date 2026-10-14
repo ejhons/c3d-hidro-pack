@@ -134,7 +134,7 @@
   (setq z1 (TUB:_Cota en nil))
   (setq z2 (TUB:_Cota en T))
   (setq decl (TUB:_Decl comp z1 z2))
-  (OBJ:_Limpa
+  (OBJ:Limpa
     (list
       (cons "COMP" (if (and comp (> comp 0.0)) comp nil))
       (cons "DECL" decl)
@@ -538,7 +538,7 @@
   (setq n 0)
   (foreach p problemas
     (setq en (nth 1 p))
-    (if (OBJ:CadastrarCom en "tubo" (OBJ:_SetChave (OBJ:AtribDe en) "SECAO" id)
+    (if (OBJ:CadastrarCom en "tubo" (OBJ:SetChave (OBJ:AtribDe en) "SECAO" id)
           (OBJ:NomeGravado en) nil nil)
       (setq n (1+ n))
     )

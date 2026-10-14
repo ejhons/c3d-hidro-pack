@@ -73,7 +73,7 @@
     (setq out
       (append out
         (list
-          (OBJ:_Limpa
+          (OBJ:Limpa
             (list
               (cons "Nome" (BAC:_NomeExib dados h))
               (cons "Handle" h)
@@ -128,7 +128,7 @@
     )
     (cons "DETALHE" (BTB:_Detalhe dados h))
     (cons "CSV"
-      (OBJ:_Limpa
+      (OBJ:Limpa
         (list
           (cons "Nome" nome)
           (cons "Handle" h)

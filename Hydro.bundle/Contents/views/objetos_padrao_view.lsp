@@ -46,7 +46,7 @@
   (setq sel
     (entsel
       (strcat "\nSelecione a entidade para cadastrar/editar como "
-              (OBJ:_NomeTipo tipo) ": ")))
+              (OBJ:NomeTipo tipo) ": ")))
   (if sel
     (progn
       (setq en (car sel))
@@ -62,13 +62,13 @@
 
 ;; <TIPO>EDITA: escolhe o objeto, depois o CAMPO a alterar; pergunta so ele
 (defun OPV:EditaCampo (tipo / sel en)
-  (setq sel (entsel (strcat "\nSelecione o objeto (" (OBJ:_NomeTipo tipo) ") a editar: ")))
+  (setq sel (entsel (strcat "\nSelecione o objeto (" (OBJ:NomeTipo tipo) ") a editar: ")))
   (if sel
     (progn
       (setq en (car sel))
       (cond
         ((not (equal (OBJ:TipoDe en) tipo))
-          (alert (strcat "Esta entidade nao e do tipo " (OBJ:_NomeTipo tipo) ".")))
+          (alert (strcat "Esta entidade nao e do tipo " (OBJ:NomeTipo tipo) ".")))
         ((OBJ:EditaCampoInterativo en)
           (princ "\nCampo alterado.")
           (if (OBJ:Obsoleto en nil)
@@ -85,7 +85,7 @@
   (if lista
     (progn
       (princ
-        (strcat "\n=== " (if tipo (OBJ:_NomeTipo tipo) "OBJETOS HIDRAULICOS")
+        (strcat "\n=== " (if tipo (OBJ:NomeTipo tipo) "OBJETOS HIDRAULICOS")
                 " no desenho: " (itoa (length lista)) " ==="))
       (princ "\nnome   [tipo]   handle   afluentes   destino")
       (foreach en lista
@@ -102,7 +102,7 @@
     )
     (princ
       (strcat "\nNenhum objeto "
-              (if tipo (strcat "do tipo " (OBJ:_NomeTipo tipo) " ") "")
+              (if tipo (strcat "do tipo " (OBJ:NomeTipo tipo) " ") "")
               "cadastrado neste desenho."))
   )
   (princ)
@@ -118,8 +118,8 @@
           (alert "Esta entidade nao e um objeto hidraulico."))
         ((and tipo (not (equal (OBJ:TipoDe en) tipo)))
           (alert
-            (strcat "Esta entidade e do tipo " (OBJ:_NomeTipo (OBJ:TipoDe en))
-                    ", nao " (OBJ:_NomeTipo tipo) ".")))
+            (strcat "Esta entidade e do tipo " (OBJ:NomeTipo (OBJ:TipoDe en))
+                    ", nao " (OBJ:NomeTipo tipo) ".")))
         (T (alert (OBJ:ToString en)))
       )
     )

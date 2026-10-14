@@ -1094,7 +1094,7 @@ trabalham por cenário (`VAZAO-EM` agora `(fn en cenario tc)`, `RECALCULA` `(fn 
 `BAC:Preparar` não grava mais (devolve o contexto com o tc); `VAZAO-EM` e `RECALCULA` são por cenário. Para textos e
 menus há adaptadores no formato "plano" antigo: `BAC:Vazao dados` (lista, um por cenário), `BAC:CalcDe dados cenario`,
 `BAC:Tc`, `BAC:TcDeCenario`; puros e testados: `BAC:_Grupos` / `BAC:_CalcFlat`. `BAC:Hidrogramas` (hidrogramas planos, um por cenário).
-Funções puras (testadas): `OBJ:_ResultSetGrupo`, `OBJ:_ResultObsoleto`, `OBJ:_ObsoletoR`,
+Funções puras (testadas): `OBJ:_ResultSetGrupo`, `OBJ:_ResultObsoleto`, `OBJ:ObsoletoR`,
 `OBJ:_TodosObsoletosR`.
 
 **Etapa 4 (hidrograma, feita):** um hidrograma por cenário, no grupo `HIDROGRAMA` (`VALOR` = Qp, `TIPO`, `TP`, `TB`,

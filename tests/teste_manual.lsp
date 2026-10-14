@@ -268,8 +268,8 @@
                      (equal (HYDRO:Val "UNIDADE" (HYDRO:Val "PRECIPITACAO" gr)) "mm")
                      (null (assoc "TR" (HYDRO:Val "VAZAO" gr)))
                      (vl-every (function (lambda (x) (equal (cdr (assoc (car x) back)) (cdr x)))) vz))))
-            (HT:Check "OBJ:_SetChave troca valor existente"
-              (equal (HYDRO:Val "X" (OBJ:_SetChave '(("X" . 1) ("Y" . 2)) "X" 9)) 9))
+            (HT:Check "OBJ:SetChave troca valor existente"
+              (equal (HYDRO:Val "X" (OBJ:SetChave '(("X" . 1) ("Y" . 2)) "X" 9)) 9))
             (HT:Check "BAC:ExecutarMetodo metodo inexistente -> ERRO"
               (assoc "ERRO" (BAC:ExecutarMetodo "nao-existe" nil nil)))
           )
@@ -603,8 +603,8 @@
       (setq r
         (append r
           (list
-            (HT:Check "OBJ:_Limpa remove pares nil"
-              (equal (OBJ:_Limpa '(("A" . 1) ("B") ("C" . "x"))) '(("A" . 1) ("C" . "x"))))
+            (HT:Check "OBJ:Limpa remove pares nil"
+              (equal (OBJ:Limpa '(("A" . 1) ("B") ("C" . "x"))) '(("A" . 1) ("C" . "x"))))
             (HT:Check "BAC:TcDe: TC-USUARIO > 0 vale como esta"
               (and (HT:Near (cdr (assoc "MIN" (BAC:TcDe '(("ATRIB" ("TC-USUARIO" . 25.0)))))) 25.0 1e-9)
                    (equal (cdr (assoc "ORIGEM" (BAC:TcDe '(("ATRIB" ("TC-USUARIO" . 25.0)))))) "usuario")))
@@ -626,8 +626,8 @@
               (equal (BAC:_Sobrescritas '(("C" . 0.6) ("CN" . 80.0))
                                         '(("CN" "CN" 75.0 "") ("LAMBDA" "L" 0.2 "")))
                      '(("CN" . 80.0))))
-            (HT:Check "OBJ:_SetChave com nil remove o item"
-              (null (assoc "X" (OBJ:_SetChave '(("X" . 1) ("Y" . 2)) "X" nil))))
+            (HT:Check "OBJ:SetChave com nil remove o item"
+              (null (assoc "X" (OBJ:SetChave '(("X" . 1) ("Y" . 2)) "X" nil))))
             (HT:Check "BAC:Contexto: TC do calculo vem antes do TC da bacia"
               (HT:Near (cdr (assoc "TC" (BAC:Contexto
                           '(("CARACT" . (("AREA" . 1.0)))
@@ -760,13 +760,13 @@
               (= (OBJ:Cap "teste-tipo" "NOME") "Tipo de teste"))
             (HT:Check "OBJ:Cap ATRIB-DEFS guarda a descricao dos campos de ATRIB"
               (equal (car (car (OBJ:Cap "teste-tipo" "ATRIB-DEFS"))) "X"))
-            (HT:Check "OBJ:_NomeTipo nil -> -" (= (OBJ:_NomeTipo nil) "-"))
-            (HT:Check "OBJ:_NomeTipo desconhecido avisa"
-              (vl-string-search "tipo ausente" (OBJ:_NomeTipo "nao-existe-xyz")))
-            (HT:Check "OBJ:_NomeTipo conhecido -> nome" (= (OBJ:_NomeTipo "teste-tipo") "Tipo de teste"))
-            (HT:Check "OBJ:_SetChave troca e remove"
-              (and (= (HYDRO:Val "A" (OBJ:_SetChave '(("A" . 1)) "A" 2)) 2)
-                   (null (assoc "A" (OBJ:_SetChave '(("A" . 1)) "A" nil)))))
+            (HT:Check "OBJ:NomeTipo nil -> -" (= (OBJ:NomeTipo nil) "-"))
+            (HT:Check "OBJ:NomeTipo desconhecido avisa"
+              (vl-string-search "tipo ausente" (OBJ:NomeTipo "nao-existe-xyz")))
+            (HT:Check "OBJ:NomeTipo conhecido -> nome" (= (OBJ:NomeTipo "teste-tipo") "Tipo de teste"))
+            (HT:Check "OBJ:SetChave troca e remove"
+              (and (= (HYDRO:Val "A" (OBJ:SetChave '(("A" . 1)) "A" 2)) 2)
+                   (null (assoc "A" (OBJ:SetChave '(("A" . 1)) "A" nil)))))
             (HT:Check "OBJ:CenarioPadrao: 25.0 -> TR25, 2.5 -> TR2.5, nil -> nil"
               (and (equal (OBJ:CenarioPadrao 25.0) "TR25")
                    (equal (OBJ:CenarioPadrao 2.5) "TR2.5")
@@ -803,18 +803,18 @@
             (HT:Check "OBJ:_ResultObsoleto marca todos os cenarios; _ObsoletoR/_TodosObsoletosR"
               (progn
                 (setq ro (OBJ:_ResultObsoleto '(("TR25" ("CENARIO" ("TR" . 25.0)) ("VAZAO" ("VALOR" . 1.0))) ("TR10" ("VAZAO" ("VALOR" . 5.0))))))
-                (and (OBJ:_ObsoletoR ro "TR25") (OBJ:_ObsoletoR ro "TR10") (OBJ:_ObsoletoR ro nil)
+                (and (OBJ:ObsoletoR ro "TR25") (OBJ:ObsoletoR ro "TR10") (OBJ:ObsoletoR ro nil)
                      (OBJ:_TodosObsoletosR ro)
                      (equal (HYDRO:Val "TR" (HYDRO:Val "CENARIO" (cdr (assoc "TR25" ro)))) 25.0))))
             (HT:Check "obsoleto por cenario: so um marcado -> _ObsoletoR sim, _Todos nao"
-              (and (OBJ:_ObsoletoR '(("A" ("CENARIO" ("OBSOLETO" . T))) ("B" ("VAZAO" ("VALOR" . 1.0)))) nil)
-                   (null (OBJ:_ObsoletoR '(("A" ("CENARIO" ("OBSOLETO" . T))) ("B" ("VAZAO" ("VALOR" . 1.0)))) "B"))
+              (and (OBJ:ObsoletoR '(("A" ("CENARIO" ("OBSOLETO" . T))) ("B" ("VAZAO" ("VALOR" . 1.0)))) nil)
+                   (null (OBJ:ObsoletoR '(("A" ("CENARIO" ("OBSOLETO" . T))) ("B" ("VAZAO" ("VALOR" . 1.0)))) "B"))
                    (null (OBJ:_TodosObsoletosR '(("A" ("CENARIO" ("OBSOLETO" . T))) ("B" ("VAZAO" ("VALOR" . 1.0))))))
                    (null (OBJ:_TodosObsoletosR nil))))
-            (HT:Check "OBJ:_FmtVal real/int/nil"
-              (and (= (OBJ:_FmtVal 0.5) "0.5") (= (OBJ:_FmtVal 3) "3") (= (OBJ:_FmtVal nil) "-")))
-            (HT:Check "OBJ:_RotuloParam com unidade"
-              (= (OBJ:_RotuloParam "teste-tipo" "X") "Parametro X (m)"))
+            (HT:Check "OBJ:FmtVal real/int/nil"
+              (and (= (OBJ:FmtVal 0.5) "0.5") (= (OBJ:FmtVal 3) "3") (= (OBJ:FmtVal nil) "-")))
+            (HT:Check "OBJ:RotuloParam com unidade"
+              (= (OBJ:RotuloParam "teste-tipo" "X") "Parametro X (m)"))
             (HT:Check "OBJ:Cap de tipo inexistente -> nil" (null (OBJ:Cap "nao-existe-xyz" "RECEBE")))
           )
         )
@@ -1043,7 +1043,7 @@
                       (cons "ATRIB" (list (cons "N" 0.013) (cons "DIAM" 0.8)))))))
     )
   )
-  (setq b (OBJ:_SetChave a "ATRIB" (list (cons "DIAM" 1.0) (cons "N" 0.013))))
+  (setq b (OBJ:SetChave a "ATRIB" (list (cons "DIAM" 1.0) (cons "N" 0.013))))
   (append r
     (list
       (HT:Check "_MudouCadastro: ATRIB diferente = T" (OBJ:_MudouCadastro a b))

@@ -112,7 +112,7 @@ Fonte da verdade da arquitetura, dos contratos e dos formatos de dados:
 - **`and` e `or` devolvem `T` ou `nil`, NUNCA o valor.** Já causou bug real:
   `(setq f (or (findfile a) (findfile b)))` dá `T`. Use `cond`/`if` + `setq` ou `HYDRO:FirstFile`.
   Use `and`/`or` só como teste.
-- **Nunca grave pares com valor `nil`** em `ldata`/dados persistidos (`BAC:_Limpa`, `OBJ:_Limpa`).
+- **Nunca grave pares com valor `nil`** em `ldata`/dados persistidos (`BAC:_Limpa`, `OBJ:Limpa`).
 - Comparar string que pode ser `nil`: use `equal`, não `=`.
 - `getkword`/`getreal` devolvem `nil` no Enter; trate como "manter o padrão".
 - `vl-catch-all-apply` em tudo que pode falhar (COM, `entget`, `ldata`, `handent` de apagado:
