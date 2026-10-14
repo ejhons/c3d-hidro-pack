@@ -99,7 +99,7 @@
 ;;; ------------------------------------------------------------
 ;; "VALOR" de um grupo do cenario (ou nil); para AVISOS, a lista de textos
 (defun EST:_V (en cenario grupo)
-  (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe en cenario grupo))
+  (HYDRO:Val "VALOR" (OBJ:ResultGrupoDe en cenario grupo))
 )
 
 
@@ -112,11 +112,11 @@
 (defun EST:_Montantes (en cenario / v y fr m x)
   (if (HYDRO:Has "ligacao")
     (foreach m (LIG:Afluentes en)
-      (setq x (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe m cenario "VELOCIDADE")))
+      (setq x (HYDRO:Val "VALOR" (OBJ:ResultGrupoDe m cenario "VELOCIDADE")))
       (if (and x (or (null v) (> x v))) (setq v x))
-      (setq x (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe m cenario "ALTURA_LAMINA")))
+      (setq x (HYDRO:Val "VALOR" (OBJ:ResultGrupoDe m cenario "ALTURA_LAMINA")))
       (if (and x (or (null y) (> x y))) (setq y x))
-      (setq x (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe m cenario "FROUDE")))
+      (setq x (HYDRO:Val "VALOR" (OBJ:ResultGrupoDe m cenario "FROUDE")))
       (if (and x (or (null fr) (> x fr))) (setq fr x))
     )
   )
@@ -167,7 +167,7 @@
   (setq linhas
     (list
       (strcat "Q = " (rtos (EST:_V en cenario "VAZAO") 2 3) " m3/s   tc = "
-              (rtos (OBJ:_Val "TC" (OBJ:ResultGrupoDe en cenario "VAZAO")) 2 1) " min   "
+              (rtos (HYDRO:Val "TC" (OBJ:ResultGrupoDe en cenario "VAZAO")) 2 1) " min   "
               (if tipo (TES:Val "nome" tipo) "tipo ?"))
     )
   )

@@ -136,15 +136,6 @@
   (vl-remove-if (function (lambda (x) (null (cdr x)))) pares)
 )
 
-;; Le o valor de uma chave numa alist.
-;;   chave : chave a procurar (normalmente string)
-;;   dados : alist (pode ser nil: nesse caso devolve nil)
-;;   retorno: o valor do par, ou nil se a chave nao existir
-;; Atalho de (cdr (assoc chave dados)); e a base de todas as leituras do registro.
-(defun OBJ:_Val (chave dados)
-  (cdr (assoc chave dados))
-)
-
 ;; Devolve uma copia da alist com a chave trocada (ou removida).
 ;;   dados : alist original
 ;;   chave : chave a definir
@@ -314,7 +305,7 @@
 (defun OBJ:TiposPara (dxf / out t1)
   (foreach t1 (OBJ:Tipos)
     (if (and (OBJ:_Cadastravel (cdr t1))
-             (member dxf (OBJ:_Val "ACEITA" (cdr t1))))
+             (member dxf (HYDRO:Val "ACEITA" (cdr t1))))
       (setq out (append out (list t1)))
     )
   )
@@ -379,7 +370,7 @@
 ;; Se o TIPO gravado na entidade nao esta mais no catalogo (plugin nao
 ;; carregado), cai na deteccao automatica em vez de devolver um tipo invalido.
 (defun OBJ:TipoDe (en / id)
-  (setq id (OBJ:_Val "TIPO" (OBJ:Ler en)))
+  (setq id (HYDRO:Val "TIPO" (OBJ:Ler en)))
   (if (and id (OBJ:TipoDados id))
     id
     (OBJ:_Detecta en)
@@ -448,7 +439,7 @@
   (foreach h (HYDRO:Get "HYDRO.OBJETOS" nil)
     (setq en (handent h))
     (if (and en (HYDRO:EntValida en)
-             (equal (OBJ:_Val "TIPO" (OBJ:Ler en)) id))
+             (equal (HYDRO:Val "TIPO" (OBJ:Ler en)) id))
       (setq out (append out (list en)))
     )
   )
@@ -513,21 +504,21 @@
 ;;   AtribDe = ATRIB (definidos pelo usuario)   CaractDe = CARACT (vem do desenho)
 ;;   ResultDe = RESULT inteiro      GrupoDe = um grupo de RESULT (ex.: "VAZAO")
 ;;   VazaoDe = atalho do grupo "VAZAO"
-(defun OBJ:NomeGravado (en)   (OBJ:_Val "NOME" (OBJ:Registro en)))
-(defun OBJ:DescricaoDe (en)   (OBJ:_Val "DESCRICAO" (OBJ:Registro en)))
-(defun OBJ:ParamsDe (en)      (OBJ:_Val "PARAMS" (OBJ:Registro en)))
-(defun OBJ:AtribDe (en)       (OBJ:_Val "ATRIB" (OBJ:Registro en)))
-(defun OBJ:CaractDe (en)      (OBJ:_Val "CARACT" (OBJ:Registro en)))
+(defun OBJ:NomeGravado (en)   (HYDRO:Val "NOME" (OBJ:Registro en)))
+(defun OBJ:DescricaoDe (en)   (HYDRO:Val "DESCRICAO" (OBJ:Registro en)))
+(defun OBJ:ParamsDe (en)      (HYDRO:Val "PARAMS" (OBJ:Registro en)))
+(defun OBJ:AtribDe (en)       (HYDRO:Val "ATRIB" (OBJ:Registro en)))
+(defun OBJ:CaractDe (en)      (HYDRO:Val "CARACT" (OBJ:Registro en)))
 ;; RESULT por cenario: ResultDe = todos; CenariosDe = nomes; CenarioDe = os grupos de um cenario;
 ;; ResultGrupoDe = os campos (planos) de um grupo de um cenario; VazaoDe = grupo "VAZAO".
-(defun OBJ:ResultDe (en)      (OBJ:_Val "RESULT" (OBJ:Registro en)))
+(defun OBJ:ResultDe (en)      (HYDRO:Val "RESULT" (OBJ:Registro en)))
 (defun OBJ:CenariosDe (en)    (mapcar 'car (OBJ:ResultDe en)))
 (defun OBJ:CenarioDe (en cenario) (cdr (assoc cenario (OBJ:ResultDe en))))
-(defun OBJ:ResultGrupoDe (en cenario grupo) (OBJ:_Val grupo (OBJ:CenarioDe en cenario)))
+(defun OBJ:ResultGrupoDe (en cenario grupo) (HYDRO:Val grupo (OBJ:CenarioDe en cenario)))
 (defun OBJ:VazaoDe (en cenario) (OBJ:ResultGrupoDe en cenario "VAZAO"))
 ;; TR de um cenario (grupo "CENARIO"), ou nil
 (defun OBJ:TrDoCenario (en cenario)
-  (OBJ:_Val "TR" (OBJ:ResultGrupoDe en cenario "CENARIO")))
+  (HYDRO:Val "TR" (OBJ:ResultGrupoDe en cenario "CENARIO")))
 
 ;; Nome para exibir
 ;;   en : ename
@@ -576,9 +567,9 @@
 (defun OBJ:CadastrarCom (en tipo-id dados nome vinculos manual /
                          reg mesmo caract antigo params v novo)
   (setq reg (OBJ:Ler en))
-  (setq mesmo (equal (OBJ:_Val "TIPO" reg) tipo-id))
-  (setq antigo (if mesmo (OBJ:_Val "CARACT" reg) nil))
-  (setq params (if mesmo (OBJ:_Val "PARAMS" reg) nil))
+  (setq mesmo (equal (HYDRO:Val "TIPO" reg) tipo-id))
+  (setq antigo (if mesmo (HYDRO:Val "CARACT" reg) nil))
+  (setq params (if mesmo (HYDRO:Val "PARAMS" reg) nil))
   (foreach v vinculos
     (setq params (OBJ:_SetChave params (car v) (cdr v)))
   )
@@ -590,12 +581,12 @@
         (cons "VERSAO" 2)
         (cons "TIPO" tipo-id)
         (cons "NOME" nome)
-        (cons "DESCRICAO" (if mesmo (OBJ:_Val "DESCRICAO" reg) nil))
+        (cons "DESCRICAO" (if mesmo (HYDRO:Val "DESCRICAO" reg) nil))
         (cons "PARAMS" params)
         (cons "ATRIB" dados)
         (cons "CARACT" caract)
         ;; resultados de outro tipo nao fazem sentido neste
-        (cons "RESULT" (if mesmo (OBJ:_Val "RESULT" reg) nil))
+        (cons "RESULT" (if mesmo (HYDRO:Val "RESULT" reg) nil))
       )
     )
   )
@@ -612,7 +603,7 @@
   (if novo
     (progn
       (setq caract novo)
-      (foreach k (OBJ:_Val "MANUAL" antigo)
+      (foreach k (HYDRO:Val "MANUAL" antigo)
         (if (and (not (assoc k manual)) (assoc k antigo))
           (setq manual (append manual (list (assoc k antigo))))
         )
@@ -625,7 +616,7 @@
       )
     )
     (progn
-      (setq chaves (OBJ:_Val "MANUAL" antigo))
+      (setq chaves (HYDRO:Val "MANUAL" antigo))
       (setq caract (vl-remove (assoc "MANUAL" antigo) antigo))
       (foreach m manual
         (setq caract (OBJ:_SetChave caract (car m) (cdr m)))
@@ -649,10 +640,10 @@
   (setq reg (if (and id (OBJ:CaractAuto) (OBJ:Cap id "CARACTERIZA")) (OBJ:Ler en) nil))
   (if reg
     (progn
-      (setq antigo (OBJ:_Val "CARACT" reg))
+      (setq antigo (HYDRO:Val "CARACT" reg))
       (setq novo
         (OBJ:_MesclaCaract
-          (OBJ:_Caracteriza en id (OBJ:_Val "PARAMS" reg)) antigo nil))
+          (OBJ:_Caracteriza en id (HYDRO:Val "PARAMS" reg)) antigo nil))
       (if (and novo (not (OBJ:_IgualAlist novo antigo)))
         (if (OBJ:GravaRegistro id en (OBJ:_SetChave reg "CARACT" novo)) T nil)
         nil
@@ -710,12 +701,12 @@
 ;; (o registro novo traz o RESULT antigo); so OBJ:ConcluiCalculo as remove.
 (defun OBJ:Salvar (en tipo-id reg / ant mudou)
   (setq ant (OBJ:Ler en))
-  (if (and ant (equal (OBJ:_Val "TIPO" ant) tipo-id) (OBJ:_Val "RESULT" ant))
+  (if (and ant (equal (HYDRO:Val "TIPO" ant) tipo-id) (HYDRO:Val "RESULT" ant))
     (progn
       (setq mudou (OBJ:_MudouCadastro ant reg))
       (if mudou
         (setq reg
-          (OBJ:_SetChave reg "RESULT" (OBJ:_ResultObsoleto (OBJ:_Val "RESULT" reg))))
+          (OBJ:_SetChave reg "RESULT" (OBJ:_ResultObsoleto (HYDRO:Val "RESULT" reg))))
       )
     )
   )
@@ -773,7 +764,7 @@
         (lambda ()
           (vl-some
             (function
-              (lambda (k) (not (OBJ:_IgualAlist (OBJ:_Val k a) (OBJ:_Val k b)))))
+              (lambda (k) (not (OBJ:_IgualAlist (HYDRO:Val k a) (HYDRO:Val k b)))))
             '("ATRIB" "PARAMS" "CARACT"))))
       nil))
   (if (vl-catch-all-error-p r) T (if r T nil))
@@ -782,10 +773,10 @@
 ;; (puro) T se o cenario de `result` esta marcado; sem cenario, se algum esta
 (defun OBJ:_ObsoletoR (result cenario)
   (if cenario
-    (if (OBJ:_Val "OBSOLETO" (OBJ:_Val "CENARIO" (cdr (assoc cenario result)))) T nil)
+    (if (HYDRO:Val "OBSOLETO" (HYDRO:Val "CENARIO" (cdr (assoc cenario result)))) T nil)
     (if (vl-some
           (function
-            (lambda (c) (OBJ:_Val "OBSOLETO" (OBJ:_Val "CENARIO" (cdr c)))))
+            (lambda (c) (HYDRO:Val "OBSOLETO" (HYDRO:Val "CENARIO" (cdr c)))))
           result)
       T nil)
   )
@@ -796,7 +787,7 @@
   (if (and result
            (vl-every
              (function
-               (lambda (c) (OBJ:_Val "OBSOLETO" (OBJ:_Val "CENARIO" (cdr c)))))
+               (lambda (c) (HYDRO:Val "OBSOLETO" (HYDRO:Val "CENARIO" (cdr c)))))
              result))
     T nil)
 )
@@ -804,7 +795,7 @@
 ;; (puro) `result` com TODOS os cenarios marcados como desatualizados
 (defun OBJ:_ResultObsoleto (result / out c meta)
   (foreach c result
-    (setq meta (OBJ:_SetChave (OBJ:_Val "CENARIO" (cdr c)) "OBSOLETO" T))
+    (setq meta (OBJ:_SetChave (HYDRO:Val "CENARIO" (cdr c)) "OBSOLETO" T))
     (setq out
       (append out (list (cons (car c) (OBJ:_SetChave (cdr c) "CENARIO" meta)))))
   )
@@ -813,7 +804,7 @@
 
 ;; T se o cenario esta desatualizado; sem cenario (nil), se ALGUM cenario esta.
 (defun OBJ:Obsoleto (en cenario)
-  (OBJ:_ObsoletoR (OBJ:_Val "RESULT" (OBJ:Registro en)) cenario)
+  (OBJ:_ObsoletoR (HYDRO:Val "RESULT" (OBJ:Registro en)) cenario)
 )
 
 ;; Flag geral: propagar a marca de obsoleto para jusante (padrao ligada)
@@ -826,7 +817,7 @@
 (defun OBJ:_MarcaObsoleto (en / id reg res)
   (setq id (OBJ:TipoDe en))
   (setq reg (if id (OBJ:Registro en) nil))
-  (setq res (OBJ:_Val "RESULT" reg))
+  (setq res (HYDRO:Val "RESULT" reg))
   (if (and res (not (OBJ:_TodosObsoletosR res))
            (OBJ:GravaRegistro id en
              (OBJ:_SetChave reg "RESULT" (OBJ:_ResultObsoleto res))))
@@ -837,7 +828,7 @@
 
 ;; Destino (ename) gravado em PARAMS "JUSANTE" = (handle . flag), ou nil
 (defun OBJ:_DestinoDe (en / j h e)
-  (setq j (OBJ:_Val "JUSANTE" (OBJ:ParamsDe en)))
+  (setq j (HYDRO:Val "JUSANTE" (OBJ:ParamsDe en)))
   (setq h (if (and j (= (type (car j)) 'STR)) (car j) nil))
   (setq e (if h (handent h) nil))
   (if (and e (HYDRO:EntValida e)) e nil)
@@ -925,7 +916,7 @@
   (if (and reg cenario)
     (OBJ:GravaRegistro id en
       (OBJ:_SetChave reg "RESULT"
-        (OBJ:_ResultSetGrupo (OBJ:_Val "RESULT" reg) cenario grupo campos)))
+        (OBJ:_ResultSetGrupo (HYDRO:Val "RESULT" reg) cenario grupo campos)))
     nil
   )
 )
@@ -942,7 +933,7 @@
 (defun OBJ:_ResultCalculo (result cenario tr grupos / meta g)
   (setq meta
     (OBJ:_SetChave
-      (OBJ:_SetChave (OBJ:_Val "CENARIO" (cdr (assoc cenario result))) "TR" tr)
+      (OBJ:_SetChave (HYDRO:Val "CENARIO" (cdr (assoc cenario result))) "TR" tr)
       "OBSOLETO" nil))
   (setq result (OBJ:_ResultSetGrupo result cenario "CENARIO" meta))
   (foreach g grupos
@@ -961,7 +952,7 @@
   (if (and reg cenario)
     (OBJ:GravaRegistro id en
       (OBJ:_SetChave reg "RESULT"
-        (OBJ:_ResultCalculo (OBJ:_Val "RESULT" reg) cenario tr grupos)))
+        (OBJ:_ResultCalculo (HYDRO:Val "RESULT" reg) cenario tr grupos)))
     nil
   )
 )
@@ -1045,7 +1036,7 @@
 ;;            em OBJ:Reindexar)
 (defun OBJ:DxfUniao (/ out t1 d)
   (foreach t1 (OBJ:Tipos)
-    (foreach d (OBJ:_Val "ACEITA" (cdr t1))
+    (foreach d (HYDRO:Val "ACEITA" (cdr t1))
       (if (not (member d out)) (setq out (append out (list d))))
     )
   )
@@ -1303,9 +1294,9 @@
       nil
     )
     (T
-      (setq atrib (OBJ:_Val "ATRIB" reg))
-      (setq params (OBJ:_Val "PARAMS" reg))
-      (setq caract (OBJ:_Val "CARACT" reg))
+      (setq atrib (HYDRO:Val "ATRIB" reg))
+      (setq params (HYDRO:Val "PARAMS" reg))
+      (setq caract (HYDRO:Val "CARACT" reg))
       (foreach d (OBJ:Cap id "ATRIB-DEFS")
         (setq itens
           (append itens
@@ -1324,7 +1315,7 @@
       )
       ;; CARACT so se for manual ou ainda sem valor; o que o desenho informa nao se digita
       (foreach d (OBJ:Cap id "CARACT-DEFS")
-        (if (or (member (car d) (OBJ:_Val "MANUAL" caract)) (not (assoc (car d) caract)))
+        (if (or (member (car d) (HYDRO:Val "MANUAL" caract)) (not (assoc (car d) caract)))
           (setq itens
             (append itens
               (list
@@ -1347,7 +1338,7 @@
           (setq kind (nth 1 it))
           (setq def (nth 2 it))
           (setq chave (car def))
-          (setq nome (OBJ:_Val "NOME" reg))
+          (setq nome (HYDRO:Val "NOME" reg))
           (cond
             ((equal kind "A")
               (setq v
@@ -1429,27 +1420,27 @@
               (HYDRO:Escolher
                 (strcat "Tipos de objeto hidraulico para " dxf ":")
                 (mapcar 'OBJ:_RotuloTipo tipos)
-                (OBJ:_IdxTipo tipos (OBJ:_Val "TIPO" reg)))))
+                (OBJ:_IdxTipo tipos (HYDRO:Val "TIPO" reg)))))
           (setq item (nth idx tipos))
           (setq id (car item))
-          (setq nome (OBJ:_PedeNome (OBJ:_Val "NOME" reg)))
+          (setq nome (OBJ:_PedeNome (HYDRO:Val "NOME" reg)))
           (setq pad (if (OBJ:Cap id "PADROES") (apply (OBJ:Cap id "PADROES") (list en)) nil))
           ;; valores ja cadastrados (mesmo tipo) tem prioridade sobre os padroes
-          (setq exist (if (equal (OBJ:_Val "TIPO" reg) id) (OBJ:_Val "ATRIB" reg) nil))
+          (setq exist (if (equal (HYDRO:Val "TIPO" reg) id) (HYDRO:Val "ATRIB" reg) nil))
           (setq params
             (HYDRO:AskParams
               (OBJ:Cap id "ATRIB-DEFS")
               (strcat "HYDRO.OBJ." id ".")
               (append exist pad)))
           ;; vinculos (PARAMS-DEFS) e, onde o desenho nao informa, CARACT manual
-          (setq params1 (if (equal (OBJ:_Val "TIPO" reg) id) (OBJ:_Val "PARAMS" reg) nil))
+          (setq params1 (if (equal (HYDRO:Val "TIPO" reg) id) (HYDRO:Val "PARAMS" reg) nil))
           (setq vinc (OBJ:_PedeVinculos id params1))
           (foreach v vinc
             (setq params1 (OBJ:_SetChave params1 (car v) (cdr v)))
           )
           (setq manual
             (OBJ:_PedeManuais id en params1
-              (if (equal (OBJ:_Val "TIPO" reg) id) (OBJ:_Val "CARACT" reg) nil)))
+              (if (equal (HYDRO:Val "TIPO" reg) id) (HYDRO:Val "CARACT" reg) nil)))
           (setq novo (OBJ:CadastrarCom en id params nome vinc manual))
           (if novo
             (progn

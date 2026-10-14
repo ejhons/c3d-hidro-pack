@@ -177,7 +177,7 @@
 ;;; ------------------------------------------------------------
 ;; "VALOR" de um grupo do cenario (ou nil); para AVISOS, a lista de textos
 (defun ESC:_V (en cenario grupo)
-  (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe en cenario grupo))
+  (HYDRO:Val "VALOR" (OBJ:ResultGrupoDe en cenario grupo))
 )
 
 
@@ -274,7 +274,7 @@
                     (progn
                       ;; os AVISOS do metodo se juntam aos da escada (um grupo AVISOS so)
                       (setq grupos (append grupos (vl-remove (assoc "AVISOS" r) r)))
-                      (setq avisos (append avisos (OBJ:_Val "VALOR" (cdr (assoc "AVISOS" r)))))
+                      (setq avisos (append avisos (HYDRO:Val "VALOR" (cdr (assoc "AVISOS" r)))))
                     )
                   )
                 )
@@ -305,9 +305,9 @@
       (strcat "Q = " (rtos (ESC:_V en cenario "VAZAO") 2 3) " m3/s   altura critica yc = "
               (rtos (ESC:_V en cenario "ALTURA_CRITICA") 2 3) " m   yc/h = "
               (rtos (ESC:_V en cenario "YC_H") 2 2))
-      (strcat (itoa (OBJ:_Val "VALOR" g)) " degrau(s): altura "
-              (rtos (OBJ:_Val "ALTURA" g) 2 3) " m   piso " (rtos (OBJ:_Val "PISO" g) 2 3)
-              " m   inclinacao " (rtos (OBJ:_Val "INCLINACAO" g) 2 1) " graus")
+      (strcat (itoa (HYDRO:Val "VALOR" g)) " degrau(s): altura "
+              (rtos (HYDRO:Val "ALTURA" g) 2 3) " m   piso " (rtos (HYDRO:Val "PISO" g) 2 3)
+              " m   inclinacao " (rtos (HYDRO:Val "INCLINACAO" g) 2 1) " graus")
     )
   )
   (foreach av (ESC:_V en cenario "AVISOS")

@@ -269,7 +269,7 @@
 ;;; ------------------------------------------------------------
 ;; "VALOR" de um grupo do cenario (ou nil); AVISOS devolve a lista de textos
 (defun SOB:_V (en cenario grupo)
-  (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe en cenario grupo))
+  (HYDRO:Val "VALOR" (OBJ:ResultGrupoDe en cenario grupo))
 )
 
 (defun SOB:Formata (en cenario / g dados id n linhas av)
@@ -285,9 +285,9 @@
               "Largura: " (rtos (SOB:_V en cenario "LARGURA_INUNDADA") 2 2) " m")
       (strcat "Velocidade: " (rtos (SOB:_V en cenario "VELOCIDADE") 2 2) " m/s")
       (strcat "Percurso: " (rtos (SOB:_V en cenario "PERCURSO") 2 2) " min"
-              (if (OBJ:_Val "TC" (OBJ:ResultGrupoDe en cenario "ENTRADA"))
+              (if (HYDRO:Val "TC" (OBJ:ResultGrupoDe en cenario "ENTRADA"))
                 (strcat "   tc de chegada: "
-                        (rtos (OBJ:_Val "TC" (OBJ:ResultGrupoDe en cenario "ENTRADA")) 2 1) " min")
+                        (rtos (HYDRO:Val "TC" (OBJ:ResultGrupoDe en cenario "ENTRADA")) 2 1) " min")
                 ""))
     )
   )

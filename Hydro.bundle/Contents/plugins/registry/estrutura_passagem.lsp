@@ -56,7 +56,7 @@
 
 ;; linhas so da classe (capacidade FORMATA: (fn en cenario))
 (defun ESP:_Formata (en cenario / dh)
-  (setq dh (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe en cenario "PERDA_CARGA")))
+  (setq dh (HYDRO:Val "VALOR" (OBJ:ResultGrupoDe en cenario "PERDA_CARGA")))
   (if dh
     (list (strcat "Perda de carga: " (rtos dh 2 4) " m"))
     nil

@@ -138,17 +138,17 @@
 
 ;; linhas so da classe (capacidade FORMATA: (fn en cenario))
 (defun EDI:_Formata (en cenario / v linhas)
-  (setq v (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe en cenario "ENERGIA_ENTRADA")))
-  (if (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe en cenario "ENERGIA_SAIDA"))
+  (setq v (HYDRO:Val "VALOR" (OBJ:ResultGrupoDe en cenario "ENERGIA_ENTRADA")))
+  (if (HYDRO:Val "VALOR" (OBJ:ResultGrupoDe en cenario "ENERGIA_SAIDA"))
     (setq linhas
       (list
         (strcat "Energia: entrada " (rtos v 2 3) " m -> saida "
-                (rtos (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe en cenario "ENERGIA_SAIDA")) 2 3)
-                " m   dissipada " (rtos (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe en cenario "DISSIPACAO")) 2 3)
+                (rtos (HYDRO:Val "VALOR" (OBJ:ResultGrupoDe en cenario "ENERGIA_SAIDA")) 2 3)
+                " m   dissipada " (rtos (HYDRO:Val "VALOR" (OBJ:ResultGrupoDe en cenario "DISSIPACAO")) 2 3)
                 " m ("
-                (rtos (* 100.0 (OBJ:_Val "EFICIENCIA" (OBJ:ResultGrupoDe en cenario "DISSIPACAO"))) 2 1) " %)")
+                (rtos (* 100.0 (HYDRO:Val "EFICIENCIA" (OBJ:ResultGrupoDe en cenario "DISSIPACAO"))) 2 1) " %)")
         (strcat "Potencia dissipada: "
-                (rtos (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe en cenario "POTENCIA_DISSIPADA")) 2 2) " kW"))))
+                (rtos (HYDRO:Val "VALOR" (OBJ:ResultGrupoDe en cenario "POTENCIA_DISSIPADA")) 2 2) " kW"))))
   linhas
 )
 

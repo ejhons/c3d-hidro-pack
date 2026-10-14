@@ -262,14 +262,14 @@
                   (BAC:_CalcFlat "TR10"
                     (list (cons "CENARIO" (list (cons "TR" 10.0)))
                           (assoc "PRECIPITACAO" gr) (assoc "VAZAO" gr))))
-                (and (equal (OBJ:_Val "VALOR" (OBJ:_Val "VAZAO" gr)) 3.123)
-                     (equal (OBJ:_Val "INPUT" (OBJ:_Val "VAZAO" gr)) '(("C" . 0.6)))
-                     (equal (OBJ:_Val "VALOR" (OBJ:_Val "PRECIPITACAO" gr)) 35.5)
-                     (equal (OBJ:_Val "UNIDADE" (OBJ:_Val "PRECIPITACAO" gr)) "mm")
-                     (null (assoc "TR" (OBJ:_Val "VAZAO" gr)))
+                (and (equal (HYDRO:Val "VALOR" (HYDRO:Val "VAZAO" gr)) 3.123)
+                     (equal (HYDRO:Val "INPUT" (HYDRO:Val "VAZAO" gr)) '(("C" . 0.6)))
+                     (equal (HYDRO:Val "VALOR" (HYDRO:Val "PRECIPITACAO" gr)) 35.5)
+                     (equal (HYDRO:Val "UNIDADE" (HYDRO:Val "PRECIPITACAO" gr)) "mm")
+                     (null (assoc "TR" (HYDRO:Val "VAZAO" gr)))
                      (vl-every (function (lambda (x) (equal (cdr (assoc (car x) back)) (cdr x)))) vz))))
             (HT:Check "OBJ:_SetChave troca valor existente"
-              (equal (OBJ:_Val "X" (OBJ:_SetChave '(("X" . 1) ("Y" . 2)) "X" 9)) 9))
+              (equal (HYDRO:Val "X" (OBJ:_SetChave '(("X" . 1) ("Y" . 2)) "X" 9)) 9))
             (HT:Check "BAC:ExecutarMetodo metodo inexistente -> ERRO"
               (assoc "ERRO" (BAC:ExecutarMetodo "nao-existe" nil nil)))
           )
@@ -541,22 +541,22 @@
         (append r
           (list
             (HT:Check "BAC: registro padrao tem TIPO bacia e VERSAO 2"
-              (and (equal (OBJ:_Val "TIPO" dados) "bacia")
-                   (equal (OBJ:_Val "VERSAO" dados) 2)))
+              (and (equal (HYDRO:Val "TIPO" dados) "bacia")
+                   (equal (HYDRO:Val "VERSAO" dados) 2)))
             (HT:Check "BAC:Talvegue vem de PARAMS" (equal (BAC:Talvegue dados) "2F"))
             (HT:Check "BAC:Atrib / BAC:Caract"
               (and (equal (BAC:Atrib dados) '(("C" . 0.6)))
                    (equal (BAC:Caract dados) '(("AREA" . 100.0)))))
             (HT:Check "BAC:Tc vem do grupo TC do cenario"
-              (and (HT:Near (OBJ:_Val "MIN" (BAC:Tc dados)) 12.0 1e-9)
-                   (equal (OBJ:_Val "ORIGEM" (BAC:Tc dados)) "kirpich")
-                   (HT:Near (OBJ:_Val "MIN" (BAC:TcDeCenario dados "TR10")) 12.0 1e-9)
+              (and (HT:Near (HYDRO:Val "MIN" (BAC:Tc dados)) 12.0 1e-9)
+                   (equal (HYDRO:Val "ORIGEM" (BAC:Tc dados)) "kirpich")
+                   (HT:Near (HYDRO:Val "MIN" (BAC:TcDeCenario dados "TR10")) 12.0 1e-9)
                    (null (BAC:TcDeCenario dados "TR99"))))
             (HT:Check "BAC:Vazao: uma vazao plana por cenario com VAZAO"
               (and (= (length (BAC:Vazao dados)) 1)
-                   (equal (OBJ:_Val "METODO" (car (BAC:Vazao dados))) "racional")
-                   (equal (OBJ:_Val "CENARIO" (car (BAC:Vazao dados))) "TR10")
-                   (HT:Near (OBJ:_Val "QP" (BAC:CalcDe dados "TR10")) 1.0 1e-9)
+                   (equal (HYDRO:Val "METODO" (car (BAC:Vazao dados))) "racional")
+                   (equal (HYDRO:Val "CENARIO" (car (BAC:Vazao dados))) "TR10")
+                   (HT:Near (HYDRO:Val "QP" (BAC:CalcDe dados "TR10")) 1.0 1e-9)
                    (null (BAC:CalcDe dados "TR99"))))
             (HT:Check "BAC:Hidrogramas sem hidrograma -> nil" (null (BAC:Hidrogramas dados)))
             (HT:Check "HID:_Grupo / BAC:_HidFlat: ida e volta do hidrograma por cenario"
@@ -571,9 +571,9 @@
                     (list (cons "CENARIO" (list (cons "TR" 10.0)))
                           (cons "VAZAO" (list (cons "VALOR" 3.0) (cons "METODO" "racional")))
                           (cons "HIDROGRAMA" hg))))
-                (and (equal (OBJ:_Val "VALOR" hg) 3.1)
+                (and (equal (HYDRO:Val "VALOR" hg) 3.1)
                      (null (assoc "TR" hg)) (null (assoc "METODO" hg))
-                     (equal (OBJ:_Val "INPUT" hg) '(("DT" . 1.0)))
+                     (equal (HYDRO:Val "INPUT" hg) '(("DT" . 1.0)))
                      (vl-every (function (lambda (x) (equal (cdr (assoc (car x) hb)) (cdr x)))) hf))))
             (HT:Check "BAC:_HidFlat sem PONTOS -> nil"
               (null (BAC:_HidFlat "TR10" '(("HIDROGRAMA" ("VALOR" . 1.0))))))
@@ -765,7 +765,7 @@
               (vl-string-search "tipo ausente" (OBJ:_NomeTipo "nao-existe-xyz")))
             (HT:Check "OBJ:_NomeTipo conhecido -> nome" (= (OBJ:_NomeTipo "teste-tipo") "Tipo de teste"))
             (HT:Check "OBJ:_SetChave troca e remove"
-              (and (= (OBJ:_Val "A" (OBJ:_SetChave '(("A" . 1)) "A" 2)) 2)
+              (and (= (HYDRO:Val "A" (OBJ:_SetChave '(("A" . 1)) "A" 2)) 2)
                    (null (assoc "A" (OBJ:_SetChave '(("A" . 1)) "A" nil)))))
             (HT:Check "OBJ:CenarioPadrao: 25.0 -> TR25, 2.5 -> TR2.5, nil -> nil"
               (and (equal (OBJ:CenarioPadrao 25.0) "TR25")
@@ -805,7 +805,7 @@
                 (setq ro (OBJ:_ResultObsoleto '(("TR25" ("CENARIO" ("TR" . 25.0)) ("VAZAO" ("VALOR" . 1.0))) ("TR10" ("VAZAO" ("VALOR" . 5.0))))))
                 (and (OBJ:_ObsoletoR ro "TR25") (OBJ:_ObsoletoR ro "TR10") (OBJ:_ObsoletoR ro nil)
                      (OBJ:_TodosObsoletosR ro)
-                     (equal (OBJ:_Val "TR" (OBJ:_Val "CENARIO" (cdr (assoc "TR25" ro)))) 25.0))))
+                     (equal (HYDRO:Val "TR" (HYDRO:Val "CENARIO" (cdr (assoc "TR25" ro)))) 25.0))))
             (HT:Check "obsoleto por cenario: so um marcado -> _ObsoletoR sim, _Todos nao"
               (and (OBJ:_ObsoletoR '(("A" ("CENARIO" ("OBSOLETO" . T))) ("B" ("VAZAO" ("VALOR" . 1.0)))) nil)
                    (null (OBJ:_ObsoletoR '(("A" ("CENARIO" ("OBSOLETO" . T))) ("B" ("VAZAO" ("VALOR" . 1.0)))) "B"))

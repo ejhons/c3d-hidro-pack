@@ -233,7 +233,7 @@
 ;;; ------------------------------------------------------------
 ;; "VALOR" de um grupo do cenario (ou nil); para AVISOS, a lista de textos
 (defun TUB:_V (en cenario grupo)
-  (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe en cenario grupo))
+  (HYDRO:Val "VALOR" (OBJ:ResultGrupoDe en cenario grupo))
 )
 
 (defun TUB:Lamina (en cenario) (TUB:_V en cenario "ALTURA_LAMINA"))

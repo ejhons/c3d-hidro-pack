@@ -264,7 +264,7 @@
 ;; Tipo de hidrograma definido na bacia (ATRIB HIDROGRAMA-TIPO); se ausente ou nao cadastrado,
 ;; "triangular-scs" (ou o primeiro cadastrado)
 (defun HID:TipoDaBacia (en / id)
-  (setq id (OBJ:_Val "HIDROGRAMA-TIPO" (OBJ:AtribDe en)))
+  (setq id (HYDRO:Val "HIDROGRAMA-TIPO" (OBJ:AtribDe en)))
   (cond
     ((and id (HYDRO:RegGet "hidrograma-tipo" id)) id)
     ((HYDRO:RegGet "hidrograma-tipo" "triangular-scs") "triangular-scs")

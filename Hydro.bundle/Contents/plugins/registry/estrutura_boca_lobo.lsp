@@ -109,13 +109,13 @@
 ;; linhas so da classe (capacidade FORMATA: (fn en cenario))
 (defun EBL:_Formata (en cenario / g)
   (setq g (OBJ:ResultGrupoDe en cenario "CAPACIDADE"))
-  (if (OBJ:_Val "VALOR" g)
+  (if (HYDRO:Val "VALOR" g)
     (list
-      (strcat "Capacidade: " (rtos (OBJ:_Val "VALOR" g) 2 3) " m3/s ("
-              (itoa (OBJ:_Val "QTD" g)) " boca(s))   captada: "
-              (rtos (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe en cenario "CAPTACAO")) 2 3)
+      (strcat "Capacidade: " (rtos (HYDRO:Val "VALOR" g) 2 3) " m3/s ("
+              (itoa (HYDRO:Val "QTD" g)) " boca(s))   captada: "
+              (rtos (HYDRO:Val "VALOR" (OBJ:ResultGrupoDe en cenario "CAPTACAO")) 2 3)
               " m3/s   passagem: "
-              (rtos (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe en cenario "PASSAGEM")) 2 3) " m3/s"))
+              (rtos (HYDRO:Val "VALOR" (OBJ:ResultGrupoDe en cenario "PASSAGEM")) 2 3) " m3/s"))
     nil
   )
 )

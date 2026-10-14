@@ -176,7 +176,7 @@
     (progn
       (setq en (cdr (assoc "OBJETO" dados)))
       (setq cen (cdr (assoc "CENARIO" dados)))
-      (setq q (OBJ:_Val "VALOR" (OBJ:ResultGrupoDe en cen "ENTRADA")))
+      (setq q (HYDRO:Val "VALOR" (OBJ:ResultGrupoDe en cen "ENTRADA")))
       (setq d (cdr (assoc "DECL" (OBJ:CaractDe en))))
       (setq id (cdr (assoc "SECAO" (OBJ:AtribDe en))))
       (if (and q d)

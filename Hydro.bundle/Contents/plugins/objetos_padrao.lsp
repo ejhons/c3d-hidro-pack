@@ -205,7 +205,7 @@
         (if sel
           (progn
             (setq reg (OBJ:Registro en))
-            (setq params (OBJ:_Val "PARAMS" reg))
+            (setq params (HYDRO:Val "PARAMS" reg))
             (setq params
               (if (equal sel "Remover")
                 (vl-remove (assoc chave params) params)
@@ -229,7 +229,7 @@
     (if (not (OBJ:TipoDe en))
       (setq out
         (append out
-          (list (list "TIPO-AUSENTE" en (OBJ:_Val "TIPO" (OBJ:Ler en))))))
+          (list (list "TIPO-AUSENTE" en (HYDRO:Val "TIPO" (OBJ:Ler en))))))
     )
   )
   out

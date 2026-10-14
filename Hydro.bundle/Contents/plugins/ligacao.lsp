@@ -83,7 +83,7 @@
 ;; Destino da origem como gravado: (handle-do-destino . contribui-ao-talvegue) ou nil.
 ;; Um flag nil aparece como ("handle"), isto e, (cons "handle" nil).
 (defun LIG:JusanteDe (en)
-  (OBJ:_Val "JUSANTE" (OBJ:ParamsDe en))
+  (HYDRO:Val "JUSANTE" (OBJ:ParamsDe en))
 )
 
 ;; Grava o destino no PARAMS da origem (par nil remove o campo).
@@ -93,7 +93,7 @@
   (setq id (OBJ:TipoDe en))
   (if (and reg id)
     (progn
-      (setq params (OBJ:_SetChave (OBJ:_Val "PARAMS" reg) "JUSANTE" par))
+      (setq params (OBJ:_SetChave (HYDRO:Val "PARAMS" reg) "JUSANTE" par))
       (if (OBJ:GravaRegistro id en (OBJ:_SetChave reg "PARAMS" params)) T nil)
     )
     nil
@@ -392,12 +392,12 @@
 ;; como (("QP" . q) ("TC" . min) ("VOLUME" ..) ("METODO" ..)), ou nil se nao calculado
 (defun LIG:Saida (en cenario / g)
   (setq g (OBJ:ResultGrupoDe en cenario "VAZAO"))
-  (if (and g (OBJ:_Val "VALOR" g))
+  (if (and g (HYDRO:Val "VALOR" g))
     (OBJ:_Limpa
-      (list (cons "QP" (OBJ:_Val "VALOR" g))
-            (cons "TC" (OBJ:_Val "TC" g))
-            (cons "VOLUME" (OBJ:_Val "VOLUME" g))
-            (cons "METODO" (OBJ:_Val "METODO" g))))
+      (list (cons "QP" (HYDRO:Val "VALOR" g))
+            (cons "TC" (HYDRO:Val "TC" g))
+            (cons "VOLUME" (HYDRO:Val "VOLUME" g))
+            (cons "METODO" (HYDRO:Val "METODO" g))))
     nil
   )
 )
@@ -413,12 +413,12 @@
     (if e
       (progn
         (setq s (LIG:Saida e cenario))
-        (if (and s (OBJ:_Val "QP" s) (OBJ:_Val "TC" s))
+        (if (and s (HYDRO:Val "QP" s) (HYDRO:Val "TC" s))
           (progn
-            (setq total (+ (if total total 0.0) (OBJ:_Val "QP" s)))
-            (setq cheg (append cheg (list (cons (OBJ:_Val "TC" s) (cdr m)))))
+            (setq total (+ (if total total 0.0) (HYDRO:Val "QP" s)))
+            (setq cheg (append cheg (list (cons (HYDRO:Val "TC" s) (cdr m)))))
             (setq origens
-              (append origens (list (cons (OBJ:Nome e) (OBJ:_Val "QP" s)))))
+              (append origens (list (cons (OBJ:Nome e) (HYDRO:Val "QP" s)))))
           )
           (setq faltam (append faltam (list (OBJ:Nome e))))
         )
@@ -828,7 +828,7 @@ Ciclos exigem decisao sua: use DESLIGAR em um dos objetos do ciclo.")
 ;; linhas padrao dos grupos calculados (quando o tipo nao define FORMATA): "GRUPO: valor"
 (defun LIG:_FormataPadrao (res / out g v)
   (foreach g res
-    (setq v (OBJ:_Val "VALOR" (cdr g)))
+    (setq v (HYDRO:Val "VALOR" (cdr g)))
     (if (and v (not (listp v)))
       (setq out (append out (list (strcat (car g) ": " (OBJ:_FmtVal v)))))
     )
@@ -839,7 +839,7 @@ Ciclos exigem decisao sua: use DESLIGAR em um dos objetos do ciclo.")
 ;; Parametros do calculo da ULTIMA vez neste CENARIO (grupo VAZAO, "INPUT");
 ;; se nunca foi calculado, os padroes (projeto > ultimo usado > padrao do tipo)
 (defun LIG:_ParamsAnteriores (en id cenario / out)
-  (setq out (OBJ:_Val "INPUT" (OBJ:ResultGrupoDe en cenario "VAZAO")))
+  (setq out (HYDRO:Val "INPUT" (OBJ:ResultGrupoDe en cenario "VAZAO")))
   (if out
     out
     (HYDRO:ParamsPadrao (OBJ:Cap id "PARAMS-CALCULO") (strcat "HYDRO.OBJ." id ".calc.") nil)
@@ -895,7 +895,7 @@ Ciclos exigem decisao sua: use DESLIGAR em um dos objetos do ciclo.")
         res
         (progn
           ;; SAIDA: tempo = regra do modo; vazao = precipitacao no maior tempo
-          (setq tp (OBJ:_Val "VALOR" (OBJ:_Val "PERCURSO" res)))
+          (setq tp (HYDRO:Val "VALOR" (HYDRO:Val "PERCURSO" res)))
           (if (not tp) (setq tp 0.0))
           (setq tcs (LIG:_TcPuro (LIG:_Modo en) tp (cdr (assoc "CHEGADAS" ent))))
           (setq comp (LIG:VazaoMontante en cenario tcs))
