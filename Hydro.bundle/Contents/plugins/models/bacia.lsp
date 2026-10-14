@@ -103,7 +103,7 @@
   (list (cons "ERRO" msg))
 )
 
-;; Utilitarios de alist (OBJ:Limpa, HYDRO:Val, OBJ:SetChave) vem da classe base.
+;; Utilitarios de alist (OBJ:Limpa, OBJ:SetChave; HYDRO:Val vem do core) vem da classe base.
 
 ;; alist sem as chaves da lista
 (defun BAC:_SemChaves (pares chaves)
@@ -126,7 +126,7 @@
   (cond
     ((not id) "-")
     ((equal id "usuario") "informado")
-    (T
+    (t
       (setq m (HYDRO:RegGet "metodo-tc" id))
       (if m (cdr (assoc "NOME" m)) id)
     )
@@ -140,7 +140,7 @@
 ;; Área da polilinha de contorno da bacia
 (defun BAC:_Area (en)
   (BAC:_Try
-    (function (lambda () (vla-get-area (vlax-ename->vla-object en))))
+    (function (lambda () (vla-get-Area (vlax-ename->vla-object en))))
   )
 )
 
@@ -214,8 +214,6 @@
   )
 )
 
-
-
 ;;; ------------------------------------------------------------
 ;;; 3. LER, GRAVAR, EDITAR, REMOVER
 ;;; ------------------------------------------------------------
@@ -244,7 +242,7 @@
       (if talv (vl-catch-all-apply 'XD:RemoveApp (list talv "DREN-BACIA")))
     )
   )
-  T
+  t
 )
 
 
@@ -402,7 +400,7 @@
       ((assoc (car x) mapa)
         (setq v (append v (list (cons (cdr (assoc (car x) mapa)) (cdr x)))))
       )
-      (T (setq v (append v (list x))))
+      (t (setq v (append v (list x))))
     )
   )
   (if p
@@ -538,7 +536,7 @@
       (setq r (BAC:TcKirpich (HYDRO:Val "COMP" caract) (HYDRO:Val "DECL" caract)))
       (if r (list (cons "TC" r)) (BAC:_Erro "Declividade nula."))
     )
-    (T
+    (t
       (BAC:_Erro "Plugin tempo_conc nao carregado: so o metodo kirpich esta disponivel.")
     )
   )
@@ -546,7 +544,7 @@
 
 ;; Verifica se método está cadastrado ou é default (kirpich)
 (defun BAC:_MetodoTcOk (id)
-  (if (or (HYDRO:RegGet "metodo-tc" id) (equal id "kirpich")) T nil)
+  (if (or (HYDRO:RegGet "metodo-tc" id) (equal id "kirpich")) t nil)
 )
 
 ;; ultimos parametros usados (ou padroes) de um metodo de tc
@@ -593,7 +591,7 @@
   (setq dados (BAC:Ler contorno))
   (cond
     ((not dados) (BAC:_Erro "Bacia nao cadastrada. Use BACIACAD."))
-    (T
+    (t
       (OBJ:AtualizaCaract contorno)
       (setq dados (BAC:Ler contorno))
       (setq tc (BAC:TcDe dados))
@@ -610,7 +608,7 @@
     ((not m)
       (BAC:_Erro (strcat "Metodo nao cadastrado: " id))
     )
-    (T
+    (t
       (foreach r (cdr (assoc "REQUER" m))
         (if (and (not falta) (not (HYDRO:Has r)))
           (setq falta r)
@@ -643,7 +641,7 @@
                 (HYDRO:Join (HYDRO:Val "FALTAM" ent) ", ")
                 ". Calcule-os antes, de montante para jusante."))
     )
-    (T
+    (t
       ;; tempo de saida: com montantes, o maior (paralelo ou serie, ver ligacao.lsp)
       (setq tcprop (HYDRO:Val "TC" cad))
       (if ent
@@ -660,7 +658,7 @@
       (setq res (BAC:ExecutarMetodo id ctx (HYDRO:Val "PARAMS" perg)))
       (cond
         ((assoc "ERRO" res) res)
-        (T
+        (t
           (if ent
             (progn
               ;; montantes reavaliados no mesmo tempo maximo; soma com a propria
@@ -675,7 +673,7 @@
                     (OBJ:SetChave
                       (OBJ:SetChave res "QP-CALC" (HYDRO:Val "QP" res))
                       "QP" (car pr))
-                    "PRESERVADA" T))
+                    "PRESERVADA" t))
               )
             )
           )
@@ -796,7 +794,7 @@
     (v (BAC:_FmtP v))
     (p (strcat (BAC:_FmtP p) " (padrao do projeto)"))
     (u (strcat (BAC:_FmtP u) " (ultimo usado)"))
-    (T "nao definido")
+    (t "nao definido")
   )
 )
 
@@ -972,8 +970,8 @@
     "Bacia hidrografica (contorno + talvegue opcional). Cadastre com BACIACAD."
     '("LWPOLYLINE" "POLYLINE" "SPLINE");aceita
     (BAC:_AtribDefs);params (ATRIB)
-    T;recebe
-    T;emite
+    t;recebe
+    t;emite
     (list
       (cons "CARACTERIZA" 'BAC:Caracterizar)
       (cons "PARAMS-DEFS" (BAC:_VinculosDefs))
@@ -1062,7 +1060,7 @@
              (HYDRO:Get "HYDRO.TR" nil)
              id
              (HYDRO:RegGet "metodo-chuva-vazao" id))
-      T
+      t
       nil))
   (if auto
     (princ (strcat "\nModo automatico: TR " (HYDRO:FmtReal (HYDRO:Get "HYDRO.TR" nil))
@@ -1077,7 +1075,7 @@
       (alert "Tempo de retorno nao informado.")
       nil
     )
-    (T
+    (t
       (if (not auto) (setq id (BAC:_EscolheMetodo)))
       (if (not id)
         (progn (alert "Metodo nao escolhido.") nil)
@@ -1131,7 +1129,7 @@
   (cond
     ((not dados) "Bacia nao cadastrada (use BACIACAD).")
     ((not m) (strcat "Metodo nao cadastrado: " metodo))
-    (T
+    (t
       (setq cad (BAC:Preparar en))
       (if (assoc "ERRO" cad)
         (HYDRO:Val "ERRO" cad)
@@ -1169,7 +1167,7 @@
   (setq contorno (BAC:SelLinha "\nSelecione a polilinha do CONTORNO da bacia: "))
   (cond
     ((not contorno) nil)
-    (T
+    (t
       (if (not (BAC:_Fechada contorno))
         (princ "\nAviso: o contorno nao esta fechado; a area sera a da figura fechada pela corda.")
       )
@@ -1186,14 +1184,14 @@
           (alert "Nenhum metodo chuva-vazao cadastrado (plugin 'metodos-chuva-vazao').")
           nil
         )
-        (T
+        (t
           (setq cad (BAC:Preparar contorno))
           (cond
             ((assoc "ERRO" cad)
               (alert (strcat "Erro: " (HYDRO:Val "ERRO" cad)))
               nil
             )
-            (T
+            (t
               (setq h (BAC:Talvegue (BAC:Ler contorno)))
               (setq talv (if (OBJ:HandleOk h) (handent h) nil))
               (princ
@@ -1215,7 +1213,7 @@
                       (alert (strcat "Erro: " (HYDRO:Val "ERRO" calc)))
                       nil
                     )
-                    (T (cons contorno calc))
+                    (t (cons contorno calc))
                   )
                 )
                 nil
@@ -1271,7 +1269,7 @@
   (cond
     ((null calcs) nil)
     ((= (length calcs) 1) calcs)
-    (T
+    (t
       (setq idx
         (HYDRO:Escolher "Calculos da bacia:"
           (cons "Todos os calculos" (mapcar 'BAC:RotuloVazao calcs))
@@ -1290,7 +1288,7 @@
       (alert "Esta entidade nao tem cadastro de bacia. Use BACIACAD ou BACIA.")
       nil
     )
-    (T en)
+    (t en)
   )
 )
 

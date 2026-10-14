@@ -353,7 +353,8 @@
 
 ;; Comandos padrao de todo objeto (arquitetura 18b). Na pratica os tres
 ;; ultimos sao uma linha cada, chamando os fluxos OPV:* (views/objetos_padrao_view):
-;;   (defun c:GENERICOCAD ()  (GEN:_Padrao 'OPV:Cadastrar))   ; cadastra/edita
+;;   (defun c:GENERICOCAD ()  (GEN:_Padrao '
+adastrar))   ; cadastra/edita
 ;;   (defun c:GENERICOS ()    (GEN:_Padrao 'OPV:Listar))      ; lista
 ;;   (defun c:GENERICOINFO () (GEN:_Padrao 'OPV:Info))        ; mostra
 ;;   (defun c:GENERICOZOOM () (GEN:_Padrao 'OPV:Zoom))        ; localiza
