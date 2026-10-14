@@ -278,7 +278,7 @@
                 (if comum "  |  escala comum a todas as secoes" "  |  escala ajustada a esta secao")))
       (set_tile "t_par" (STB:_Par sec))
       ;; secao cheia (ou ate h): area, perimetro, raio hidraulico
-      (setq g (TUB:_Geom sec (TUB:_YMax sec)))
+      (setq g (TUB:Geom sec (TUB:YMax sec)))
       (setq a (cdr (assoc "A" g)))
       (setq p (cdr (assoc "P" g)))
       (set_tile "t_r"
@@ -477,7 +477,7 @@
 ;; pela corda. r = raio, y = altura (limitada a D). Centro em (0, r).
 (defun STB:_PontosLaminaCirc (r y / phi n k pts a)
   (setq y (min y (* 2.0 r)))
-  (setq phi (TUB:_Acos (/ (- r y) r)))
+  (setq phi (TUB:Acos (/ (- r y) r)))
   (setq n 32)
   (setq k 0)
   (while (<= k n)

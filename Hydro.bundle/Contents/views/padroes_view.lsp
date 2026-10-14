@@ -25,7 +25,7 @@
         (setq chave (nth 0 d))
         (setq atual (cdr (car (HYDRO:ParamsPadrao (list d) prefixo nil))))
         (setq v
-          (HYDRO:_AskUm (nth 1 d) (nth 3 d) (if (nth 4 d) (nth 4 d) "real") (nth 5 d) atual))
+          (HYDRO:AskUm (nth 1 d) (nth 3 d) (if (nth 4 d) (nth 4 d) "real") (nth 5 d) atual))
         (if v (HYDRO:Set (HYDRO:PadraoKey prefixo chave) v))
       )
     )

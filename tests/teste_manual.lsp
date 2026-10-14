@@ -635,10 +635,10 @@
                           '(("METODO" . "racional") ("TR" . 10.0) ("DUR" . 12.0) ("TC" . 12.0)
                             ("QP" . 1.0))))
                        ) 12.0 1e-9))
-            (HT:Check "BAC:_NomeExib sem nome -> B-handle"
-              (= (BAC:_NomeExib '(("CARACT")) "2F3") "B-2F3"))
-            (HT:Check "BAC:_NomeTc usuario -> informado" (= (BAC:_NomeTc "usuario") "informado"))
-            (HT:Check "BAC:_NomeTc nil -> -" (= (BAC:_NomeTc nil) "-"))
+            (HT:Check "BAC:NomeExib sem nome -> B-handle"
+              (= (BAC:NomeExib '(("CARACT")) "2F3") "B-2F3"))
+            (HT:Check "BAC:NomeTc usuario -> informado" (= (BAC:NomeTc "usuario") "informado"))
+            (HT:Check "BAC:NomeTc nil -> -" (= (BAC:NomeTc nil) "-"))
           )
         )
       )
@@ -687,7 +687,7 @@
             (HT:Check "BTB:_Registro: linha tem 10 colunas (9 tabs)"
               (= (HT:Conta (cdr (assoc "LINHA" reg)) "\t") 9))
             (HT:Check "BTB:_Registro: Qp max = maior dos calculos"
-              (HT:Near (BAC:_MaxQp
+              (HT:Near (BAC:MaxQp
                          '(("RESULT" . (("TR10" ("VAZAO" ("VALOR" . 3.123)))
                                         ("TR25" ("VAZAO" ("VALOR" . 4.5)))))))
                        4.5 1e-9))
@@ -897,23 +897,23 @@
             (HT:Check "LIG:_HandlesDe" (equal (LIG:_HandlesDe '(("1" . T) ("2"))) '("1" "2")))
             ;; tempo de saida (valores calculados a mao; docs/arquitetura.md 15.4)
             ;; bacia, tp = 30: montante que NAO contribui ao talvegue corre em paralelo (max)
-            (HT:Check "LIG:_TcPuro concentracao: nao contribui, tc_k=20 -> max(30,20) = 30"
-              (HT:Near (LIG:_TcPuro "concentracao" 30.0 '((20.0))) 30.0 1e-9))
-            (HT:Check "LIG:_TcPuro concentracao: nao contribui, tc_k=50 -> 50"
-              (HT:Near (LIG:_TcPuro "concentracao" 30.0 '((50.0))) 50.0 1e-9))
+            (HT:Check "LIG:TcPuro concentracao: nao contribui, tc_k=20 -> max(30,20) = 30"
+              (HT:Near (LIG:TcPuro "concentracao" 30.0 '((20.0))) 30.0 1e-9))
+            (HT:Check "LIG:TcPuro concentracao: nao contribui, tc_k=50 -> 50"
+              (HT:Near (LIG:TcPuro "concentracao" 30.0 '((50.0))) 50.0 1e-9))
             ;; contribui diretamente ao talvegue: serie (soma)
-            (HT:Check "LIG:_TcPuro concentracao: contribui, tc_k=20 -> 20+30 = 50"
-              (HT:Near (LIG:_TcPuro "concentracao" 30.0 '((20.0 . T))) 50.0 1e-9))
-            (HT:Check "LIG:_TcPuro concentracao: contribui, tc_k=50 -> 80"
-              (HT:Near (LIG:_TcPuro "concentracao" 30.0 '((50.0 . T))) 80.0 1e-9))
-            (HT:Check "LIG:_TcPuro concentracao: (40 nao) e (10 sim) -> max(30,40,40) = 40"
-              (HT:Near (LIG:_TcPuro "concentracao" 30.0 '((40.0) (10.0 . T))) 40.0 1e-9))
-            (HT:Check "LIG:_TcPuro concentracao: sem montante = tp"
-              (HT:Near (LIG:_TcPuro "concentracao" 30.0 nil) 30.0 1e-9))
-            (HT:Check "LIG:_TcPuro percurso: max(20,35)+2.5 = 37.5"
-              (HT:Near (LIG:_TcPuro "percurso" 2.5 '((20.0) (35.0))) 37.5 1e-9))
-            (HT:Check "LIG:_TcPuro percurso: sem montante = nil"
-              (null (LIG:_TcPuro "percurso" 2.5 nil)))
+            (HT:Check "LIG:TcPuro concentracao: contribui, tc_k=20 -> 20+30 = 50"
+              (HT:Near (LIG:TcPuro "concentracao" 30.0 '((20.0 . T))) 50.0 1e-9))
+            (HT:Check "LIG:TcPuro concentracao: contribui, tc_k=50 -> 80"
+              (HT:Near (LIG:TcPuro "concentracao" 30.0 '((50.0 . T))) 80.0 1e-9))
+            (HT:Check "LIG:TcPuro concentracao: (40 nao) e (10 sim) -> max(30,40,40) = 40"
+              (HT:Near (LIG:TcPuro "concentracao" 30.0 '((40.0) (10.0 . T))) 40.0 1e-9))
+            (HT:Check "LIG:TcPuro concentracao: sem montante = tp"
+              (HT:Near (LIG:TcPuro "concentracao" 30.0 nil) 30.0 1e-9))
+            (HT:Check "LIG:TcPuro percurso: max(20,35)+2.5 = 37.5"
+              (HT:Near (LIG:TcPuro "percurso" 2.5 '((20.0) (35.0))) 37.5 1e-9))
+            (HT:Check "LIG:TcPuro percurso: sem montante = nil"
+              (null (LIG:TcPuro "percurso" 2.5 nil)))
             ;; flag geral: maior vazao entre entrada e saida
             (HT:Check "LIG:Preserva: entrada 8 > calculada 5.5, flag ligada -> (8 T)"
               (equal (LIG:Preserva 8.0 5.5 T) '(8.0 T)))
@@ -1064,22 +1064,22 @@
   (setq rs (TUB:Resolver circ 0.01 0.013 0.3))
   (setq rc (TUB:Resolver circ 0.01 0.013 5.0))
   (list
-    (HT:Check "TUB:_Acos: 0 -> pi/2, 1 -> 0, -1 -> pi, 0.5 -> 1.047198"
-      (and (HT:Near (TUB:_Acos 0.0) (/ pi 2.0) 1e-9) (HT:Near (TUB:_Acos 1.0) 0.0 1e-9)
-           (HT:Near (TUB:_Acos -1.0) pi 1e-9) (HT:Near (TUB:_Acos 0.5) 1.047198 1e-5)
-           (HT:Near (TUB:_Acos -0.5) 2.094395 1e-5)))
+    (HT:Check "TUB:Acos: 0 -> pi/2, 1 -> 0, -1 -> pi, 0.5 -> 1.047198"
+      (and (HT:Near (TUB:Acos 0.0) (/ pi 2.0) 1e-9) (HT:Near (TUB:Acos 1.0) 0.0 1e-9)
+           (HT:Near (TUB:Acos -1.0) pi 1e-9) (HT:Near (TUB:Acos 0.5) 1.047198 1e-5)
+           (HT:Near (TUB:Acos -0.5) 2.094395 1e-5)))
     (HT:Check "TUB:_Q circular D=0.8 cheio, S=0.01, n=0.013 = 1.32235 m3/s"
-      (HT:Near (TUB:_Q (TUB:_Geom circ 0.8) 0.013 0.01) 1.32235 1e-4))
-    (HT:Check "TUB:_Geom/_Q circular D=0.8 meia secao: A = 0.25133, P = 1.25664, Q = 0.66118"
-      (and (HT:Near (cdr (assoc "A" (TUB:_Geom circ 0.4))) 0.251327 1e-5)
-           (HT:Near (cdr (assoc "P" (TUB:_Geom circ 0.4))) 1.256637 1e-5)
-           (HT:Near (TUB:_Q (TUB:_Geom circ 0.4) 0.013 0.01) 0.661175 1e-4)))
+      (HT:Near (TUB:_Q (TUB:Geom circ 0.8) 0.013 0.01) 1.32235 1e-4))
+    (HT:Check "TUB:Geom/_Q circular D=0.8 meia secao: A = 0.25133, P = 1.25664, Q = 0.66118"
+      (and (HT:Near (cdr (assoc "A" (TUB:Geom circ 0.4))) 0.251327 1e-5)
+           (HT:Near (cdr (assoc "P" (TUB:Geom circ 0.4))) 1.256637 1e-5)
+           (HT:Near (TUB:_Q (TUB:Geom circ 0.4) 0.013 0.01) 0.661175 1e-4)))
     (HT:Check "TUB:_Q retangular b=1, y=0.5, n=0.015, S=0.001 = 0.41832 m3/s"
-      (HT:Near (TUB:_Q (TUB:_Geom ret 0.5) 0.015 0.001) 0.418317 1e-4))
-    (HT:Check "TUB:_Geom trapezio b=1, z=1.5, y=0.6: A=1.14, P=3.16333, T=2.8"
-      (and (HT:Near (cdr (assoc "A" (TUB:_Geom trp 0.6))) 1.14 1e-6)
-           (HT:Near (cdr (assoc "P" (TUB:_Geom trp 0.6))) 3.163331 1e-5)
-           (HT:Near (cdr (assoc "T" (TUB:_Geom trp 0.6))) 2.8 1e-6)))
+      (HT:Near (TUB:_Q (TUB:Geom ret 0.5) 0.015 0.001) 0.418317 1e-4))
+    (HT:Check "TUB:Geom trapezio b=1, z=1.5, y=0.6: A=1.14, P=3.16333, T=2.8"
+      (and (HT:Near (cdr (assoc "A" (TUB:Geom trp 0.6))) 1.14 1e-6)
+           (HT:Near (cdr (assoc "P" (TUB:Geom trp 0.6))) 3.163331 1e-5)
+           (HT:Near (cdr (assoc "T" (TUB:Geom trp 0.6))) 2.8 1e-6)))
     (HT:Check "TUB:Resolver retangular devolve y = 0.5 para Q = 0.418317"
       (HT:Near (cdr (assoc "Y" (TUB:Resolver ret 0.001 0.015 0.4183169))) 0.5 1e-4))
     (HT:Check "TUB:Resolver trapezio: y = 0.6, V = 0.64057, Fr = 0.32052 para Q = 0.73025"

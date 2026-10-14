@@ -75,9 +75,9 @@
         (list
           (OBJ:Limpa
             (list
-              (cons "Nome" (BAC:_NomeExib dados h))
+              (cons "Nome" (BAC:NomeExib dados h))
               (cons "Handle" h)
-              (cons "Metodo" (BAC:_NomeMetodo (HYDRO:Val "METODO" c)))
+              (cons "Metodo" (BAC:NomeMetodo (HYDRO:Val "METODO" c)))
               (cons "TR (anos)" (HYDRO:Val "TR" c))
               (cons "Duracao (min)" (HYDRO:Val "DUR" c))
               (cons "tc (min)" (HYDRO:Val "TC" c))
@@ -99,16 +99,16 @@
 (defun BTB:_Registro (en dados h / c atrib nome area ha comp decl tc origem nc nh qpm)
   (setq c (BAC:Caract dados))
   (setq atrib (BAC:Atrib dados))
-  (setq nome (BAC:_NomeExib dados h))
+  (setq nome (BAC:NomeExib dados h))
   (setq area (HYDRO:Val "AREA" c))
   (setq ha (if area (/ area 10000.0) nil))
   (setq comp (HYDRO:Val "COMP" c))
   (setq decl (HYDRO:Val "DECL" c))
   (setq tc (HYDRO:Val "MIN" (BAC:Tc dados)))
-  (setq origem (BAC:_NomeTc (HYDRO:Val "ORIGEM" (BAC:Tc dados))))
+  (setq origem (BAC:NomeTc (HYDRO:Val "ORIGEM" (BAC:Tc dados))))
   (setq nc (length (BAC:Vazao dados)))
   (setq nh (length (BAC:Hidrogramas dados)))
-  (setq qpm (BAC:_MaxQp dados))
+  (setq qpm (BAC:MaxQp dados))
   (list
     (cons "EN" en)
     (cons "HANDLE" h)
@@ -298,7 +298,7 @@
   (initget "Sim Nao")
   (setq r
     (getkword
-      (strcat "\nRemover o cadastro da bacia " (BAC:_NomeExib dados (HYDRO:Handle en))
+      (strcat "\nRemover o cadastro da bacia " (BAC:NomeExib dados (HYDRO:Handle en))
               " (calculos e hidrogramas serao perdidos)? [Sim/Nao] <Nao>: ")))
   (if (equal r "Sim")
     (OBJ:Remover en)

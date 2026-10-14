@@ -410,7 +410,7 @@
 
 ;; Pergunta UM parametro conforme o tipo: "real" (padrao), "int",
 ;; "arquivo" (getfiled) ou "opcoes" (menu numerado sobre a lista ops)
-(defun HYDRO:_AskUm (rot uni tipo ops atual / r i txt)
+(defun HYDRO:AskUm (rot uni tipo ops atual / r i txt)
   (setq txt (strcat rot (if (and uni (/= uni "")) (strcat " (" uni ")") "")))
   (cond
     ((= tipo "arquivo")
@@ -453,7 +453,7 @@
     )
     (if (not atual) (setq atual (nth 2 d)))
     (setq v
-      (HYDRO:_AskUm
+      (HYDRO:AskUm
         (nth 1 d) (nth 3 d) (if (nth 4 d) (nth 4 d) "real") (nth 5 d) atual
       )
     )

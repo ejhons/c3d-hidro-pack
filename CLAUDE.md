@@ -32,7 +32,7 @@ Pontos mais incertos, a testar primeiro no AutoCAD:
   índice (varre `OBJ:Listar`; custo com muitos objetos), `BAC:_CalcularEGravar` composto, `VAZAO-EM` reavaliando o método,
   `LIGAR` perguntando o flag, sarjeta recebendo sarjeta em cadeia. Desenhos antigos com `HYDRO-LIG` **não migram**.
 - Recálculo automático dos montantes, `LIG:OferecerLigacao` (prompt `getkword` com `initget` montado), `PADROES`
-  (`HYDRO:_AskUm`), modo `CALCAUTO` e `sssetfirst`/`ssget` na oferta de ligação: nada disso foi executado.
+  (`HYDRO:AskUm`), modo `CALCAUTO` e `sssetfirst`/`ssget` na oferta de ligação: nada disso foi executado.
 - Etiquetas/tabela viva: `vla-addtable`/`vla-settext`/`vla-insertrows` e `vla-put-textstring` no MTEXT, `ssget "_X"` por camada
   (camada congelada?), assinatura dos eventos e a atualização a cada cálculo (custo com muitos objetos).
 - **Armazenamento padronizado da bacia** (sem `ARMAZENAMENTO` proprio): `OBJ:Salvar`/`OBJ:RegistroDe`, gancho `AO-REMOVER`, indice unico `HYDRO.OBJETOS`

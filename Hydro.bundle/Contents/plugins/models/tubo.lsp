@@ -82,7 +82,7 @@
 )
 
 ;; arco-cosseno (AutoLISP nao tem), x em [-1, 1], resultado em [0, pi]
-(defun TUB:_Acos (x)
+(defun TUB:Acos (x)
   (cond
     ((>= x 1.0) 0.0)
     ((<= x -1.0) pi)
@@ -243,18 +243,18 @@
 ;;; 6. CALCULOS
 ;;; ------------------------------------------------------------
 ;; altura maxima da seccao: D (circular) ou h
-(defun TUB:_YMax (sec)
+(defun TUB:YMax (sec)
   (if (equal (TUB:Val "forma" sec) "circular") (TUB:Val "d" sec) (TUB:Val "h" sec))
 )
 
 ;; (puro) geometria hidraulica na altura y: (("A" . m2) ("P" . m) ("T" . m)); y e limitado a altura maxima
-(defun TUB:_Geom (sec y / forma d b z th)
+(defun TUB:Geom (sec y / forma d b z th)
   (setq forma (TUB:Val "forma" sec))
-  (setq y (min y (TUB:_YMax sec)))
+  (setq y (min y (TUB:YMax sec)))
   (cond
     ((equal forma "circular")
       (setq d (TUB:Val "d" sec))
-      (setq th (* 2.0 (TUB:_Acos (- 1.0 (/ (* 2.0 y) d)))))
+      (setq th (* 2.0 (TUB:Acos (- 1.0 (/ (* 2.0 y) d)))))
       (list (cons "A" (* (/ (* d d) 8.0) (- th (sin th))))
             (cons "P" (* d (/ th 2.0)))
             (cons "T" (* d (sin (/ th 2.0)))))
@@ -287,7 +287,7 @@
 ;;   ou (("ERRO" . msg)).
 (defun TUB:Resolver (sec s n q /
                      ymax ylim qlim qcap lo hi mid i y g a p tt v fr cheio avisos circ)
-  (setq ymax (TUB:_YMax sec))
+  (setq ymax (TUB:YMax sec))
   (setq circ (equal (TUB:Val "forma" sec) "circular"))
   (cond
     ((not ymax) (TUB:_Erro "Seccao invalida."))
@@ -297,8 +297,8 @@
     (T
       ;; limite da lamina livre: circular, y = 0.9382 D (vazao maxima); demais, y = h
       (setq ylim (if circ (* 0.9382 ymax) ymax))
-      (setq qlim (TUB:_Q (TUB:_Geom sec ylim) n s))
-      (setq qcap (TUB:_Q (TUB:_Geom sec ymax) n s))
+      (setq qlim (TUB:_Q (TUB:Geom sec ylim) n s))
+      (setq qcap (TUB:_Q (TUB:Geom sec ymax) n s))
       (if (> q qlim)
         (progn (setq y ymax) (setq cheio T))
         (progn
@@ -307,7 +307,7 @@
           (setq i 0)
           (while (< i 60)
             (setq mid (/ (+ lo hi) 2.0))
-            (if (< (TUB:_Q (TUB:_Geom sec mid) n s) q)
+            (if (< (TUB:_Q (TUB:Geom sec mid) n s) q)
               (setq lo mid)
               (setq hi mid))
             (setq i (1+ i))
@@ -315,7 +315,7 @@
           (setq y (/ (+ lo hi) 2.0))
         )
       )
-      (setq g (TUB:_Geom sec y))
+      (setq g (TUB:Geom sec y))
       (setq a (cdr (assoc "A" g)))
       (setq p (cdr (assoc "P" g)))
       (setq tt (cdr (assoc "T" g)))

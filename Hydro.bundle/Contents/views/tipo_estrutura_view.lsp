@@ -72,7 +72,7 @@
 (defun TEV:_PedeId (msg padrao / id)
   (setq id (getint (strcat "\n" msg " <" (itoa padrao) ">: ")))
   (if (not id) (setq id padrao))
-  (if (TES:_Tipo id)
+  (if (TES:Tipo id)
     id
     (progn (princ (strcat "\nTipo " (itoa id) " nao existe (veja TIPOESTRUTURA).")) nil)
   )
@@ -98,7 +98,7 @@
       (setq id (TEV:_PedeId "Id do tipo a editar" (TES:TipoAtualId)))
       (if id
         (progn
-          (setq tipo (TES:_Tipo id))
+          (setq tipo (TES:Tipo id))
           (setq d (TEV:_PedeDados tipo))
           (setq novo (if d (TES:Editar id (nth 0 d) (nth 1 d) (nth 2 d)) nil))
           (if novo
@@ -129,7 +129,7 @@
               (alert "Nao e possivel remover o ultimo tipo do catalogo."))
             (T
               (initget "Sim Nao")
-              (setq r (getkword (strcat "\nRemover " (TES:Rotulo (TES:_Tipo id)) "? [Sim/Nao] <Nao>: ")))
+              (setq r (getkword (strcat "\nRemover " (TES:Rotulo (TES:Tipo id)) "? [Sim/Nao] <Nao>: ")))
               (if (equal r "Sim")
                 (progn (TES:Remover id) (princ "\nTipo removido."))
               )
@@ -152,10 +152,10 @@
                        "   (" (itoa (TES:EmUso (car tipo))) " estrutura(s))"))
       )
       (setq novo (getint (strcat "\nTipo atual <" (itoa atual) ">: ")))
-      (if (and novo (TES:_Tipo novo))
+      (if (and novo (TES:Tipo novo))
         (progn
           (HYDRO:Set "HYDRO.TIPO.ESTRUTURA.ATUAL" novo)
-          (princ (strcat "\nTipo atual: " (TES:Rotulo (TES:_Tipo novo))))
+          (princ (strcat "\nTipo atual: " (TES:Rotulo (TES:Tipo novo))))
         )
         (if novo (princ (strcat "\nTipo " (itoa novo) " nao existe.")))
       )

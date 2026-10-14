@@ -131,7 +131,7 @@
 )
 
 ;; tipo (id ("k" . v) ...) pelo id, ou nil
-(defun TES:_Tipo (id)
+(defun TES:Tipo (id)
   (assoc id (TES:Tipos))
 )
 
@@ -161,7 +161,7 @@
 ;; Troca os valores do tipo id (mantem a posicao). Devolve o tipo novo ou nil.
 (defun TES:Editar (id nome classe valores / tipo)
   (setq tipo (TES:_NovoTipo id nome classe valores))
-  (if (and tipo (TES:_Tipo id))
+  (if (and tipo (TES:Tipo id))
     (progn
       (HYDRO:Set "HYDRO.TIPOS.ESTRUTURA"
         (mapcar (function (lambda (x) (if (= (car x) id) tipo x))) (TES:Tipos)))
@@ -195,8 +195,8 @@
 
 ;; Remove o tipo id (nunca o ultimo). Se era o atual, o primeiro restante passa a atual.
 (defun TES:Remover (id / resto)
-  (setq resto (vl-remove (TES:_Tipo id) (TES:Tipos)))
-  (if (and (TES:_Tipo id) resto)
+  (setq resto (vl-remove (TES:Tipo id) (TES:Tipos)))
+  (if (and (TES:Tipo id) resto)
     (progn
       (HYDRO:Set "HYDRO.TIPOS.ESTRUTURA" resto)
       (if (equal (TES:TipoAtualId) id)
@@ -217,7 +217,7 @@
 ;; Auditoria: o tipo atual precisa existir no catalogo
 (defun TES:_AudAtual (/ id)
   (setq id (HYDRO:Get "HYDRO.TIPO.ESTRUTURA.ATUAL" nil))
-  (if (and id (not (TES:_Tipo id)))
+  (if (and id (not (TES:Tipo id)))
     (list (list "TIPO-ESTRUTURA-ATUAL" id))
     nil
   )

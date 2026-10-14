@@ -68,7 +68,7 @@
 ;;;   (a propria). Com montantes (BAC:_CalcularEGravar):
 ;;;     ENTRADA  Q = soma das saidas dos montantes, tc = maior tempo de saida (grupo
 ;;;              "ENTRADA", gravado)
-;;;     tempo de SAIDA = LIG:_TcPuro "concentracao" (paralelo se nao contribui ao
+;;;     tempo de SAIDA = LIG:TcPuro "concentracao" (paralelo se nao contribui ao
 ;;;              talvegue, serie se contribui); a chuva usa SEMPRE esse maior tempo
 ;;;     Q_calc   = bacia propria + montantes reavaliados nesse tempo (racional composto)
 ;;;     Q SAIDA  = max(Q entrada, Q_calc) com a flag geral HYDRO.VAZAO.PRESERVA
@@ -111,18 +111,18 @@
 )
 
 ;; Nome para exibir: o cadastrado ou "B-<handle>"
-(defun BAC:_NomeExib (dados h)
+(defun BAC:NomeExib (dados h)
   (if (BAC:Nome dados) (BAC:Nome dados) (strcat "B-" h))
 )
 
 ;; Nome do método de cálculo chuva-vazão salvo como default
-(defun BAC:_NomeMetodo (id / m)
+(defun BAC:NomeMetodo (id / m)
   (setq m (HYDRO:RegGet "metodo-chuva-vazao" id))
   (if m (cdr (assoc "NOME" m)) id)
 )
 
 ;; Nome do método default de cálculo do tempo de concentração
-(defun BAC:_NomeTc (id / m)
+(defun BAC:NomeTc (id / m)
   (cond
     ((not id) "-")
     ((equal id "usuario") "informado")
@@ -487,7 +487,7 @@
 )
 
 ;; maior vazao de pico entre as vazoes calculadas (0.0 se nao ha)
-(defun BAC:_MaxQp (dados / q c)
+(defun BAC:MaxQp (dados / q c)
   (setq q 0.0)
   (foreach c (BAC:Vazao dados)
     (if (and (HYDRO:Val "QP" c) (> (HYDRO:Val "QP" c) q))
@@ -648,7 +648,7 @@
       (setq tcprop (HYDRO:Val "TC" cad))
       (if ent
         (progn
-          (setq tcout (LIG:_TcPuro "concentracao" tcprop (HYDRO:Val "CHEGADAS" ent)))
+          (setq tcout (LIG:TcPuro "concentracao" tcprop (HYDRO:Val "CHEGADAS" ent)))
           (setq m (HYDRO:RegGet "metodo-chuva-vazao" id))
           (setq cad (cons (cons "TC" tcout) cad))
           (if (not (and m (cdr (assoc "USA-DUR" m))))
@@ -780,7 +780,7 @@
 (defun BAC:RotuloVazao (vaz / qp)
   (setq qp (HYDRO:Val "QP" vaz))
   (strcat (if (HYDRO:Val "CENARIO" vaz) (strcat (HYDRO:Val "CENARIO" vaz) "  |  ") "")
-          (BAC:_NomeMetodo (HYDRO:Val "METODO" vaz))
+          (BAC:NomeMetodo (HYDRO:Val "METODO" vaz))
           "  |  TR " (HYDRO:FmtReal (HYDRO:Val "TR" vaz)) " anos"
           "  |  dur. " (HYDRO:FmtReal (HYDRO:Val "DUR" vaz)) " min"
           (if qp (strcat "  |  Qp " (rtos qp 2 3) " m3/s") ""))
@@ -811,7 +811,7 @@
   (setq tc (BAC:Tc dados))
   (setq atrib (BAC:Atrib dados))
   (append
-    (list (strcat "BACIA " (BAC:_NomeExib dados h)))
+    (list (strcat "BACIA " (BAC:NomeExib dados h)))
     (if (HYDRO:Val "AREA" c)
       (list (strcat "Area: " (rtos (/ (HYDRO:Val "AREA" c) 10000.0) 2 3) " ha"))
     )
@@ -821,7 +821,7 @@
     )
     (if (HYDRO:Val "MIN" tc)
       (list (strcat "tc = " (rtos (HYDRO:Val "MIN" tc) 2 2) " min ("
-                    (BAC:_NomeTc (HYDRO:Val "ORIGEM" tc)) ")"))
+                    (BAC:NomeTc (HYDRO:Val "ORIGEM" tc)) ")"))
     )
     ;; sempre mostra C e CN com o valor que vale (da bacia, ou do projeto/ultimo usado)
     (list
@@ -841,7 +841,7 @@
 ;; Linhas de uma vazao calculada
 (defun BAC:LinhasVazao (vaz)
   (append
-    (list (strcat "[" (BAC:_NomeMetodo (HYDRO:Val "METODO" vaz))
+    (list (strcat "[" (BAC:NomeMetodo (HYDRO:Val "METODO" vaz))
                   " - TR " (HYDRO:FmtReal (HYDRO:Val "TR" vaz)) " anos"
                   (if (and (HYDRO:Val "CENARIO" vaz)
                            (not (equal (HYDRO:Val "CENARIO" vaz)
@@ -911,7 +911,7 @@
 (HYDRO:SetLabel "xdata:DREN-BACIA:1040" "Vazao de pico Qp" "m3/s")
 
 (defun BAC:_ObjNome (en)
-  (BAC:_NomeExib (BAC:Ler en) (HYDRO:Handle en))
+  (BAC:NomeExib (BAC:Ler en) (HYDRO:Handle en))
 )
 
 (defun BAC:_ObjResumo (en / dados linhas c)
@@ -1008,7 +1008,7 @@
 ;;   BACIAINFO  mostra a bacia (BAC:ToString)
 
 ;; Pede uma polilinha (contorno ou talvegue). Retorna o ename ou nil.
-(defun BAC:_SelLinha (msg / ss)
+(defun BAC:SelLinha (msg / ss)
   (princ msg)
   (if (setq ss (ssget "_:S" '((0 . "LWPOLYLINE,POLYLINE,SPLINE"))))
     (ssname ss 0)
@@ -1066,7 +1066,7 @@
       nil))
   (if auto
     (princ (strcat "\nModo automatico: TR " (HYDRO:FmtReal (HYDRO:Get "HYDRO.TR" nil))
-                   " anos, metodo " (BAC:_NomeMetodo id)))
+                   " anos, metodo " (BAC:NomeMetodo id)))
   )
   (setq tr
     (if auto
@@ -1166,7 +1166,7 @@
 ;; Fluxo completo: contorno, cadastro (se preciso, o generico), preparo (tc), perguntas
 ;; e calculo. Retorna (contorno . calculo) ou nil.
 (defun BAC:_FluxoCalculo (/ contorno dados talv cad perg calc erro h)
-  (setq contorno (BAC:_SelLinha "\nSelecione a polilinha do CONTORNO da bacia: "))
+  (setq contorno (BAC:SelLinha "\nSelecione a polilinha do CONTORNO da bacia: "))
   (cond
     ((not contorno) nil)
     (T
@@ -1198,7 +1198,7 @@
               (setq talv (if (OBJ:HandleOk h) (handent h) nil))
               (princ
                 (strcat "\nUsando tc = " (rtos (HYDRO:Val "TC" cad) 2 2) " min ("
-                        (BAC:_NomeTc (HYDRO:Val "TC-ORIGEM" cad))
+                        (BAC:NomeTc (HYDRO:Val "TC-ORIGEM" cad))
                         "). Para alterar: BACIAEDITA."))
               (setq perg (BAC:_PerguntasCalculo cad))
               (if perg (princ (strcat "\nCenario: " (HYDRO:Val "CENARIO" perg))))
@@ -1283,7 +1283,7 @@
 
 ;; Seleciona um contorno que ja tem cadastro
 (defun BAC:_SelBaciaCad (/ en)
-  (setq en (BAC:_SelLinha "\nSelecione o CONTORNO da bacia: "))
+  (setq en (BAC:SelLinha "\nSelecione o CONTORNO da bacia: "))
   (cond
     ((not en) nil)
     ((not (BAC:Ler en))

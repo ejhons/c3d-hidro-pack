@@ -60,11 +60,11 @@
 ;;; UTILITARIOS (puros)
 ;;; ------------------------------------------------------------
 ;; aspas e barras invertidas quebrariam o DCL gerado
-(defun PNL:_Sanitiza (s)
+(defun PNL:Sanitiza (s)
   (vl-string-translate "\"\\" "' " s)
 )
 
-(defun PNL:_Num (v padrao)
+(defun PNL:Num (v padrao)
   (if v v padrao)
 )
 
@@ -94,12 +94,12 @@
 )
 
 ;; macro no estilo configurado
-(defun PNL:_Macro (cmd)
+(defun PNL:Macro (cmd)
   (PNL:_MacroDe cmd (PNL:_MacroEstilo))
 )
 
-(defun PNL:_Rotulo (item)
-  (PNL:_Sanitiza (cdr (assoc "ROTULO" (cdr item))))
+(defun PNL:Rotulo (item)
+  (PNL:Sanitiza (cdr (assoc "ROTULO" (cdr item))))
 )
 
 ;; divide a lista em pedacos de n elementos
@@ -116,7 +116,7 @@
 
 ;; itens = ((id . dados) ...) na ordem de cadastro.
 ;; Retorna ((grupo item item ...) ...) ordenado por grupo e por botao.
-(defun PNL:_Grupos (itens / i it nome g novo lista)
+(defun PNL:Grupos (itens / i it nome g novo lista)
   (setq i 0)
   (foreach it itens
     (setq i (1+ i))
@@ -125,7 +125,7 @@
     (if (not g)
       (setq g
         (list nome
-              (PNL:_Num (cdr (assoc "ORDEM-GRUPO" (cdr it))) 100)
+              (PNL:Num (cdr (assoc "ORDEM-GRUPO" (cdr it))) 100)
               i
               nil)
             lista (append lista (list g)))
@@ -133,7 +133,7 @@
     (setq novo
       (list (car g) (cadr g) (caddr g)
             (append (cadddr g)
-                    (list (list (PNL:_Num (cdr (assoc "ORDEM" (cdr it))) 100) i it)))))
+                    (list (list (PNL:Num (cdr (assoc "ORDEM" (cdr it))) 100) i it)))))
     (setq lista (subst novo g lista))
   )
   (mapcar
@@ -165,7 +165,7 @@
 (defun PNL:_LarguraGrupo (g / w it)
   (setq w 24)
   (foreach it (cdr g)
-    (setq w (max w (+ (strlen (PNL:_Rotulo it)) 2)))
+    (setq w (max w (+ (strlen (PNL:Rotulo it)) 2)))
   )
   (min w 44)
 )
@@ -188,13 +188,13 @@
       (setq linhas
         (append linhas
           (list "    : boxed_column {"
-                (strcat "      label = \"" (PNL:_Sanitiza (car g)) "\";"))))
+                (strcat "      label = \"" (PNL:Sanitiza (car g)) "\";"))))
       (foreach it (cdr g)
         (setq linhas
           (append linhas
             (list
               (strcat "      : button { key = \"b" (itoa k) "\"; label = \""
-                      (PNL:_Rotulo it) "\"; width = " (itoa w)
+                      (PNL:Rotulo it) "\"; width = " (itoa w)
                       "; fixed_width = true; }"))))
         (setq ordem (append ordem (list it)))
         (setq k (1+ k))
@@ -258,7 +258,7 @@
       nil
     )
     (T
-      (setq gerado (PNL:_GerarDcl (PNL:_Grupos itens) 3))
+      (setq gerado (PNL:_GerarDcl (PNL:Grupos itens) 3))
       (setq ordem (cdr gerado))
       (setq arq (vl-filename-mktemp "hydro_painel" nil ".dcl"))
       (setq f (open arq "w"))
@@ -335,7 +335,7 @@
 ;; a ribbon/barra no editor de personalizacao (CUI). Sempre em dia com o
 ;; catalogo de acoes.
 (defun c:HYDROMACROS (/ grupos arq f g it cmd)
-  (setq grupos (PNL:_Grupos (HYDRO:RegList "acao-painel")))
+  (setq grupos (PNL:Grupos (HYDRO:RegList "acao-painel")))
   (if (not grupos)
     (alert "Nenhuma acao cadastrada no painel.")
     (progn
@@ -353,7 +353,7 @@
                   (setq cmd (cdr (assoc "CMD" (cdr it))))
                   (write-line
                     (strcat (car g) "\t" (cdr (assoc "ROTULO" (cdr it))) "\t"
-                            cmd "\t" (PNL:_Macro cmd) "\t" (PNL:_MacroDe cmd "cancela"))
+                            cmd "\t" (PNL:Macro cmd) "\t" (PNL:_MacroDe cmd "cancela"))
                     f)
                 )
               )

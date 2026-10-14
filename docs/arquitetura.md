@@ -632,7 +632,7 @@ hidráulica. Gravação, em `RESULT`:
 (`LIG:Saida`); `tc_entrada` = maior tempo de saída entre eles. Os montantes devem ter sido
 calculados antes, com o mesmo método e TR (senão `FALTAM` e o cálculo para).
 
-**Tempo de saída** (`LIG:_TcPuro`), `tc_k` = tempo de saída do montante `k`, `tp` = tempo próprio:
+**Tempo de saída** (`LIG:TcPuro`), `tc_k` = tempo de saída do montante `k`, `tp` = tempo próprio:
 
 ```
 concentracao (bacia, tp = tc dela):

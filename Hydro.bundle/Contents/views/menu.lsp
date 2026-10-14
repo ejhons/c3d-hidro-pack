@@ -33,7 +33,7 @@
 ;;; ------------------------------------------------------------
 ;;; ESTRUTURA DO MENU (pura)
 ;;; ------------------------------------------------------------
-;; grupos = saida de PNL:_Grupos; disp-fn = funcao dados -> T/nil (acao disponivel).
+;; grupos = saida de PNL:Grupos; disp-fn = funcao dados -> T/nil (acao disponivel).
 ;; Retorna ((grupo (rotulo . macro) ...) ...), sem grupos vazios.
 (defun MNU:_Estrutura (grupos disp-fn / g it itens out)
   (foreach g grupos
@@ -42,12 +42,12 @@
       (if (apply disp-fn (list (cdr it)))
         (setq itens
           (append itens
-            (list (cons (PNL:_Rotulo it)
-                        (PNL:_Macro (cdr (assoc "CMD" (cdr it))))))))
+            (list (cons (PNL:Rotulo it)
+                        (PNL:Macro (cdr (assoc "CMD" (cdr it))))))))
       )
     )
     (if itens
-      (setq out (append out (list (cons (PNL:_Sanitiza (car g)) itens))))
+      (setq out (append out (list (cons (PNL:Sanitiza (car g)) itens))))
     )
   )
   out
@@ -86,7 +86,7 @@
 )
 
 (defun MNU:_Preenche (pop estrutura / g sub it)
-  (vla-addmenuitem pop (vla-get-count pop) "Painel de comandos..." (PNL:_Macro "HYDRO"))
+  (vla-addmenuitem pop (vla-get-count pop) "Painel de comandos..." (PNL:Macro "HYDRO"))
   (vla-addseparator pop (vla-get-count pop))
   (foreach g estrutura
     (setq sub (vla-addsubmenu pop (vla-get-count pop) (car g)))
@@ -107,7 +107,7 @@
   )
   (MNU:_Preenche
     pop
-    (MNU:_Estrutura (PNL:_Grupos (HYDRO:RegList "acao-painel")) 'PNL:Disponivel)
+    (MNU:_Estrutura (PNL:Grupos (HYDRO:RegList "acao-painel")) 'PNL:Disponivel)
   )
   (setq barra (vla-get-menubar acad))
   (if (equal (vla-get-onmenubar pop) :vlax-false)

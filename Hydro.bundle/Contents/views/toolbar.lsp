@@ -68,7 +68,7 @@
 ;;; ------------------------------------------------------------
 ;;; ESTRUTURA DAS BARRAS (pura)
 ;;; ------------------------------------------------------------
-;; grupos = saida de PNL:_Grupos; disp-fn = funcao dados -> T/nil.
+;; grupos = saida de PNL:Grupos; disp-fn = funcao dados -> T/nil.
 ;; Retorna ((nome-da-barra ordem-grupo ((id rotulo comando macro) ...)) ...)
 ;; sem grupos vazios.
 (defun TLB:_Estrutura (grupos disp-fn / g it itens out cmd og)
@@ -80,16 +80,16 @@
           (setq cmd (cdr (assoc "CMD" (cdr it))))
           (setq itens
             (append itens
-              (list (list (car it) (PNL:_Rotulo it) cmd (PNL:_Macro cmd)))))
+              (list (list (car it) (PNL:Rotulo it) cmd (PNL:Macro cmd)))))
         )
       )
     )
     (if itens
       (progn
-        (setq og (PNL:_Num (cdr (assoc "ORDEM-GRUPO" (cdr (cadr g)))) 100))
+        (setq og (PNL:Num (cdr (assoc "ORDEM-GRUPO" (cdr (cadr g)))) 100))
         (setq out
           (append out
-            (list (list (strcat "Hydro - " (PNL:_Sanitiza (car g))) og itens))))
+            (list (list (strcat "Hydro - " (PNL:Sanitiza (car g))) og itens))))
       )
     )
   )
@@ -182,7 +182,7 @@
   (setq toolbars (vla-get-toolbars (TLB:_GrupoPrincipal acad)))
   (setq estrutura
     (TLB:_Estrutura
-      (PNL:_Grupos (HYDRO:RegList "acao-painel"))
+      (PNL:Grupos (HYDRO:RegList "acao-painel"))
       'PNL:Disponivel))
   (setq existentes (TLB:_Existentes toolbars))
   (setq i 0)

@@ -350,7 +350,7 @@
 ;;   chegadas  lista de (tc-de-saida-do-montante . contribui-ao-talvegue)
 ;; concentracao: max( tp , max_k( tc_k + (contribui ? tp : 0) ) )
 ;; percurso:     max_k( tc_k ) + tp   (nil se nao ha chegadas)
-(defun LIG:_TcPuro (modo tp chegadas / r c)
+(defun LIG:TcPuro (modo tp chegadas / r c)
   (if (equal modo "concentracao")
     (progn
       (setq r tp)
@@ -897,7 +897,7 @@ Ciclos exigem decisao sua: use DESLIGAR em um dos objetos do ciclo.")
           ;; SAIDA: tempo = regra do modo; vazao = precipitacao no maior tempo
           (setq tp (HYDRO:Val "VALOR" (HYDRO:Val "PERCURSO" res)))
           (if (not tp) (setq tp 0.0))
-          (setq tcs (LIG:_TcPuro (LIG:_Modo en) tp (cdr (assoc "CHEGADAS" ent))))
+          (setq tcs (LIG:TcPuro (LIG:_Modo en) tp (cdr (assoc "CHEGADAS" ent))))
           (setq comp (LIG:VazaoMontante en cenario tcs))
           (setq pr
             (LIG:Preserva (cdr (assoc "QP" ent))

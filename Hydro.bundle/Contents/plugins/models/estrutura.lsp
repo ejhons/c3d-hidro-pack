@@ -85,7 +85,7 @@
 
 ;; tipo (id ("k" . v) ...) do catalogo pelo id, ou nil (sem o plugin do catalogo, nil)
 (defun EST:_Tipo (id)
-  (if (and id (HYDRO:Has "tipo-estrutura")) (TES:_Tipo id) nil)
+  (if (and id (HYDRO:Has "tipo-estrutura")) (TES:Tipo id) nil)
 )
 
 ;; entrada da classe (catalogo "classe-estrutura") do tipo, ou nil

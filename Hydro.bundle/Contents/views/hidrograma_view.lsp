@@ -290,7 +290,7 @@
 ;;; ------------------------------------------------------------
 ;; Seleciona um contorno que ja tem cadastro de bacia
 (defun HID:_SelBacia (/ en)
-  (setq en (BAC:_SelLinha "\nSelecione o CONTORNO da bacia: "))
+  (setq en (BAC:SelLinha "\nSelecione o CONTORNO da bacia: "))
   (cond
     ((not en) nil)
     ((not (BAC:Ler en))
